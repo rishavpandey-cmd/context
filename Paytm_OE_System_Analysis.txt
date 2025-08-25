@@ -1,0 +1,1662 @@
+# Paytm Onboarding Enterprise (OE) System Analysis
+
+## Executive Summary
+
+The Paytm Onboarding Enterprise (OE) system is a comprehensive merchant onboarding platform that acts as a bridge between CAM (Customer Acquisition Manager) agents and the downstream BOSS system. It handles the complete lifecycle of merchant onboarding from initial lead creation to final Merchant ID (MID) generation, supporting both Retail and Enterprise merchant types with Enterprise being the larger, more complex onboarding process.
+
+## System Architecture Overview
+
+### Core Components
+1. **CAM Agents** - Field agents who create and update business leads
+2. **QC Agents** - Quality Control agents who validate submitted data
+3. **KYB System** - Know Your Business validation layer post-QC
+4. **BOSS System** - Downstream system for final validation and MID generation
+5. **OE System** - Central orchestration platform
+
+### Technology Stack
+- **Backend**: Java Spring Boot with JPA/Hibernate
+- **Database**: MySQL with audit trail support
+- **API**: RESTful APIs for all operations
+- **Workflow Engine**: Custom workflow management system
+- **Audit**: Hibernate Envers for data versioning
+
+## Database Schema Analysis
+
+### Core Tables
+
+#### 1. `user_business_mapping` (Central Entity)
+**Purpose**: Primary entity representing merchant onboarding requests
+
+**Key Fields**:
+- `id`: Primary key
+- `lead_id`: UUID for lead identification
+- `solution_type`: Type of onboarding (e.g., `enterprise_merchant_business`)
+- `entity_type`: Legal structure (e.g., `PROPRIETORSHIP`, `PUBLIC_LIMITED`)
+- `creator_cust_id`: CAM agent who created the lead
+- `status`: Current status (0 = active)
+- `channel`: Source channel (e.g., `OE_PANEL`)
+- `audit_trail_id`: Links to audit history
+
+**Relationships**:
+- One-to-many with `workflow_status`
+- One-to-many with related business entities
+- One-to-many with documents and additional info
+
+#### 2. `workflow_status` (Workflow Management)
+**Purpose**: Tracks the current stage and history of each lead
+
+**Key Fields**:
+- `user_business_mapping_id`: Links to main entity
+- `workflow_node_id`: Current workflow stage
+- `prev_workflow_node_id`: Previous stage
+- `is_active`: Current active status
+- `metadata`: Additional workflow data
+
+#### 3. `workflow_node` (Workflow Definition)
+**Purpose**: Defines available workflow stages and transitions
+
+**Key Fields**:
+- `stage`: Main workflow stage (e.g., `GG`, `QC`, `KYB_WALLET_ID_EDIT`)
+- `sub_stage`: Specific sub-stage (e.g., `LEAD_CREATED`, `QC_ACTION_PENDING`)
+
+### Operational Data Insights
+
+#### Entity Type Distribution
+```
+PROPRIETORSHIP: 2,493 (67.3%)
+PUBLIC_LIMITED: 1,196 (32.2%)
+PRIVATE_LIMITED: 191 (5.2%)
+TRUST: 188 (5.1%)
+HINDU_UNDIVIDED_FAMILY: 28 (0.8%)
+LIMITED_LIABILITY_PARTNERSHIP: 22 (0.6%)
+PARTNERSHIP: 20 (0.5%)
+ASSOCIATION_OF_PERSONS: 14 (0.4%)
+SOCIETY_ASSOCIATION_CLUB: 12 (0.3%)
+GOVERNMENT: 6 (0.2%)
+```
+
+#### Workflow Stage Distribution
+```
+GG - LEAD_CREATED: 4,171 (Most common starting point)
+GG - LEAD_POSTED: 2,886 (Lead submitted for processing)
+LEAD_CLOSED - LEAD_PARTIALLY_CLOSED: 1,120 (Incomplete closures)
+PG_CALLBACK - PG_CALL_BACK_SUCCESS: 1,050 (Payment gateway success)
+GG - SUB_WORKFLOW_TRIGGERED: 1,031 (Sub-processes initiated)
+GG - DOCUMENT_UPLOADED: 947 (Document processing)
+QC - QC_ACTION_PENDING: 937 (Quality control pending)
+LEAD_CLOSED - LEAD_SUCCESSFULLY_CLOSED: 848 (Successful completions)
+KYB_WALLET_ID_EDIT - KYB_WALLET_ID_EDIT_SUCCESS: 842 (KYB processing)
+PANEL - PANEL_SUCCESS: 751 (Panel operations)
+```
+
+## Codebase Architecture
+
+### Core Controllers
+
+#### 1. `SolutionLeadController` (`MerchantService/src/main/java/com/paytm/merchant/controllers/panel/kam/`)
+**Purpose**: Primary API controller for solution lead management
+
+**Key Endpoints**:
+- `POST /panel/v1/solution/lead` - Create new solution lead
+- `PUT /panel/v1/solution/lead` - Update existing lead
+- `GET /panel/v1/solution/lead` - Fetch lead details
+- `POST /panel/v1/solution/createUpdateLead` - Combined create/update operation
+
+**Dependencies** (15+ services):
+- Lead management services
+- Validation services
+- Workflow services
+- Document services
+- Notification services
+
+#### 2. `BulkUpdateController` (`MerchantService/src/main/java/com/paytm/merchant/controllers/oe/`)
+**Purpose**: Handles bulk operations for enterprise leads
+
+**Key Endpoints**:
+- `bulkEnterpriseModification` - Bulk updates for enterprise leads
+- `createBulkEnterpriseChild` - Bulk child lead creation
+
+### Core Entities
+
+#### 1. `UserBusinessMapping` (`oe-base/src/main/java/com/paytm/oe/entity/`)
+**Purpose**: Central entity representing merchant onboarding lifecycle
+
+**Key Annotations**:
+- `@Entity` - JPA entity
+- `@Table(name = "user_business_mapping")` - Database table mapping
+- `@Audited` - Hibernate Envers audit trail
+- `@UUIDKey(uuidColumn = "uuid")` - Custom UUID generation
+
+**Relationships**:
+- One-to-many with workflow statuses
+- One-to-many with business documents
+- One-to-many with additional information
+- One-to-many with child leads
+
+### Data Access Layer
+
+#### 1. `IUserBusinessMappingDao` Interface
+**Purpose**: Primary DAO interface with 100+ methods
+
+**Key Operations**:
+- Lead creation and updates
+- Workflow management
+- Document handling
+- Status tracking
+- Bulk operations
+- Search and filtering
+
+#### 2. `UserBusinessMappingDaoImpl` Implementation
+**Purpose**: Concrete implementation of the DAO interface
+
+**Features**:
+- Hibernate-based data access
+- Transaction management
+- Query optimization
+- Audit trail integration
+
+### Service Layer
+
+#### 1. `EnrichmentFlowModificationFlowServiceImpl`
+**Purpose**: Handles enrichment and modification flows
+
+**Key Functionality**:
+- MDR (Merchant Discount Rate) line item processing
+- Commercial approval workflows
+- Document rejection handling
+- Paymode line item management
+
+## Comprehensive Class Analysis
+
+### Core Entity Classes
+
+#### 1. `UserBusinessMapping` (Central Entity)
+**Location**: `oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMapping.java`
+**Purpose**: Primary entity representing merchant onboarding lifecycle
+
+**Key Annotations**:
+- `@Entity` - JPA entity mapping
+- `@Table(name = "user_business_mapping")` - Database table mapping
+- `@Audited` - Hibernate Envers audit trail
+- `@UUIDKey(uuidColumn = "uuid")` - Custom UUID generation
+
+**Core Fields**:
+- `id` - Primary key (auto-generated)
+- `leadId` - UUID for lead identification
+- `custId` - Customer ID (non-editable from client)
+- `entityType` - Legal structure (PROPRIETORSHIP, PUBLIC_LIMITED, etc.)
+- `creatorCustId` - CAM agent who created the lead
+- `ownershipType` - Ownership type enumeration
+- `solutionType` - Type of onboarding (enterprise_merchant_business, etc.)
+- `channel` - Source channel (OE_PANEL, etc.)
+- `status` - Current status (IN_PROGRESS, etc.)
+- `priority` - Priority level for processing
+
+**Relationships**:
+- `@OneToOne` with `RelatedBusinessSolutionMapping`
+- `@OneToMany` with `WorkFlowStatus` (workflow history)
+- `@OneToMany` with `UserBusinessMappingOwner` (business owners)
+- `@OneToMany` with `UserBusinessAddressMapping` (addresses)
+- `@OneToMany` with `SolutionAdditionalInfo` (additional data)
+
+#### 2. `BaseEntity` (Abstract Base Class)
+**Location**: `oe-base/src/main/java/com/paytm/oe/entity/BaseEntity.java`
+**Purpose**: Common base class for all entities
+
+**Key Features**:
+- `id` - Primary key with auto-generation
+- `createdAt` - Creation timestamp (non-updatable)
+- `updatedAt` - Last update timestamp
+- Common serialization support
+
+#### 3. `WorkFlowStatus` (Workflow Management)
+**Location**: `oe-base/src/main/java/com/paytm/oe/entity/WorkFlowStatus.java`
+**Purpose**: Tracks workflow stages and transitions
+
+**Key Fields**:
+- `userBusinessMappingId` - Links to main entity
+- `workflowNodeId` - Current workflow stage
+- `prevWorkflowNodeId` - Previous stage
+- `isActive` - Current active status
+- `metadata` - Additional workflow data
+
+#### 4. `WorkFlowNode` (Workflow Definition)
+**Location**: `oe-base/src/main/java/com/paytm/oe/entity/WorkFlowNode.java`
+**Purpose**: Defines available workflow stages
+
+**Key Fields**:
+- `stage` - Main workflow stage (GG, QC, KYB_WALLET_ID_EDIT, etc.)
+- `subStage` - Specific sub-stage (LEAD_CREATED, QC_ACTION_PENDING, etc.)
+- `description` - Stage description
+- `isActive` - Whether stage is active
+
+### Data Access Layer (DAO) Classes
+
+#### 1. `IUserBusinessMappingDao` (Primary DAO Interface)
+**Location**: `oe-base/src/main/java/com/paytm/oe/dao/IUserBusinessMappingDao.java`
+**Purpose**: Primary data access interface with 100+ methods
+
+**Key Method Categories**:
+
+**Lead Management**:
+- `getLeadByLeadId(String leadId)` - Fetch lead by UUID
+- `getLeadById(long id)` - Fetch lead by primary key
+- `getLeadsByLeadIds(Set<String> leadIds)` - Bulk lead fetching
+- `fetchAllBusinessForCustId(long custId)` - All businesses for customer
+
+**Workflow Operations**:
+- `fetchAllLeadsForStage(Stage stage)` - Leads in specific stage
+- `fetchAllLeadsForStages(List<Stage> stages)` - Leads in multiple stages
+- `fetchAllLeadsForStageAndPeriod()` - Time-based stage filtering
+
+**Search and Filtering**:
+- `getLeadsBySolEntityType()` - Filter by solution and entity type
+- `fetchUBMForSolTypAndSolAddInfoKeyValue()` - Search by additional info
+- `fetchLeadByPanSolution()` - Search by PAN and solution type
+
+**Bulk Operations**:
+- `getLeadInRangeByIdAndStatus()` - Range-based fetching
+- `filterInProgressLeadsForSolution()` - Filter in-progress leads
+
+#### 2. `UserBusinessMappingDaoImpl` (DAO Implementation)
+**Location**: `oe-base/src/main/java/com/paytm/oe/dao/impl/UserBusinessMappingDaoImpl.java`
+**Purpose**: Concrete implementation of the DAO interface
+
+**Key Features**:
+- Hibernate-based data access
+- Transaction management
+- Query optimization
+- Audit trail integration
+- Caching support
+
+#### 3. Additional DAO Interfaces
+**Workflow Management**:
+- `IWorkFlowStatusDao` - Workflow status operations
+- `IWorkFlowNodeDao` - Workflow node operations
+- `IWorkFlowDefinitionDao` - Workflow definition management
+
+**Business Entities**:
+- `IUserBusinessMappingOwnerDao` - Business owner operations
+- `IUserInfoDao` - User information management
+- `IUserKycDetailsDao` - KYC details management
+
+**Solution Management**:
+- `ISolutionDao` - Solution operations
+- `ISolutionDocumentDao` - Document management
+- `ISolutionAdditionalInfoDao` - Additional info management
+
+### Controller Classes
+
+#### 1. `SolutionLeadController` (Primary API Controller)
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/controllers/panel/kam/SolutionLeadController.java`
+**Purpose**: Primary REST API controller for solution lead management
+
+**Key Annotations**:
+- `@RestController("panelSolutionLeadController")`
+- `@RequestMapping("/panel/v1/solution")`
+- `@Tag(name = "Solution Lead")` - Swagger documentation
+
+**Core Endpoints**:
+- `POST /panel/v1/solution/lead` - Create new solution lead
+- `PUT /panel/v1/solution/lead` - Update existing lead
+- `GET /panel/v1/solution/lead` - Fetch lead details
+- `POST /panel/v1/solution/createUpdateLead` - Combined create/update
+- `GET /panel/v1/solution/lead/{leadId}` - Get lead by ID
+- `POST /panel/v1/solution/lead/validate` - Validate lead data
+
+**Service Dependencies** (15+ services):
+- `OEServiceFactoryImpl` - Service factory
+- `IValidateService` - Validation services
+- `IBankUpdateService` - Bank update operations
+- `SolutionLeadHelperService` - Helper services
+- `IPennyDropNameCheckService` - Name verification
+- `IBankDetailsInterface` - Bank details management
+- `IGSTService` - GST services
+- `ISellerPanelService` - Seller panel integration
+
+#### 2. `BulkUpdateController` (Bulk Operations)
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/controllers/oe/BulkUpdateController.java`
+**Purpose**: Handles bulk operations for enterprise leads
+
+**Key Endpoints**:
+- `bulkEnterpriseModification` - Bulk updates for enterprise leads
+- `createBulkEnterpriseChild` - Bulk child lead creation
+
+### Service Layer Classes
+
+#### 1. `EnrichmentFlowModificationFlowServiceImpl`
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java`
+**Purpose**: Handles enrichment and modification flows
+
+**Key Functionality**:
+- MDR (Merchant Discount Rate) line item processing
+- Commercial approval workflows
+- Document rejection handling
+- Paymode line item management
+- Workflow stage transitions
+
+#### 2. Service Categories by Package
+
+**Lead Management Services** (`oe-service/src/main/java/com/paytm/oe/services/lead/`):
+- Lead creation and updates
+- Workflow management
+- Status transitions
+- Validation services
+
+**KYC Services** (`oe-service/src/main/java/com/paytm/oe/services/kyc/`):
+- KYC verification
+- Document validation
+- Address verification
+- PAN validation
+
+**Bank Services** (`oe-service/src/main/java/com/paytm/oe/services/bank/`):
+- Bank account verification
+- Penny drop validation
+- Bank details management
+- Account validation
+
+**GST Services** (`oe-service/src/main/java/com/paytm/oe/services/gst/`):
+- GST number validation
+- GST return verification
+- Business verification
+
+**PG Services** (`oe-service/src/main/java/com/paytm/oe/services/pg/`):
+- Payment gateway integration
+- MID generation
+- Callback handling
+- Transaction processing
+
+### Utility and Helper Classes
+
+#### 1. `OEServiceFactoryImpl`
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/impl/OEServiceFactoryImpl.java`
+**Purpose**: Service factory for creating and managing service instances
+
+#### 2. `SolutionLeadHelperService`
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/services/panel/kam/SolutionLeadHelperService.java`
+**Purpose**: Helper service for solution lead operations
+
+#### 3. `CommonUtils`
+**Location**: `oe-base/src/main/java/com/paytm/oe/utils/CommonUtils.java`
+**Purpose**: Common utility methods used across the system
+
+### Enumeration Classes
+
+#### 1. `SolutionType`
+**Location**: `oe-base/src/main/java/com/paytm/oe/enums/SolutionType.java`
+**Purpose**: Defines different types of merchant onboarding solutions
+
+**Key Values**:
+- `enterprise_merchant_business` - Main business entity
+- `enterprise_merchant_parent` - Parent company
+- `enterprise_merchant_child` - Subsidiary/child company
+- `enterprise_merchant_cmt_staging` - CMT staging process
+- `enterprise_merchant_cpv` - CPV (Customer Profile Verification)
+- `enterprise_merchant_sap` - SAP integration
+- `enterprise_merchant_aml` - AML (Anti-Money Laundering)
+
+#### 2. `EntityType`
+**Location**: `oe-base/src/main/java/com/paytm/oe/enums/EntityType.java`
+**Purpose**: Defines legal structures for businesses
+
+**Key Values**:
+- `PROPRIETORSHIP` - Individual proprietorship
+- `PUBLIC_LIMITED` - Public limited company
+- `PRIVATE_LIMITED` - Private limited company
+- `TRUST` - Trust organization
+- `HINDU_UNDIVIDED_FAMILY` - HUF
+- `LIMITED_LIABILITY_PARTNERSHIP` - LLP
+- `PARTNERSHIP` - Partnership firm
+- `ASSOCIATION_OF_PERSONS` - AOP
+- `SOCIETY_ASSOCIATION_CLUB` - Society/Association
+- `GOVERNMENT` - Government entity
+
+#### 3. `ModificationFlow`
+**Location**: `oe-base/src/main/java/com/paytm/oe/enums/ModificationFlow.java`
+**Purpose**: Defines different types of modification flows
+
+**Key Values**:
+- `ENRICHMENT_FLOW` - Data enrichment process
+- `MODIFICATION_FLOW` - Data modification process
+- `VALIDATION_FLOW` - Validation process
+
+### Configuration and Constants
+
+#### 1. `OEConstants`
+**Location**: `oe-base/src/main/java/com/paytm/oe/common/constants/OEConstants.java`
+**Purpose**: System-wide constants and configuration values
+
+#### 2. `ErrorMessages`
+**Location**: `oe-base/src/main/java/com/paytm/oe/common/constants/ErrorMessages.java`
+**Purpose**: Centralized error message definitions
+
+### Exception Classes
+
+#### 1. `CreateOrUpdateLeadException`
+**Location**: `oe-base/src/main/java/com/paytm/oe/exceptions/CreateOrUpdateLeadException.java`
+**Purpose**: Custom exception for lead creation/update failures
+
+#### 2. `ValidationException`
+**Location**: `oe-base/src/main/java/com/paytm/oe/common/exception/ValidationException.java`
+**Purpose**: Custom exception for validation failures
+
+#### 3. `BadRequestException`
+**Location**: `oe-base/src/main/java/com/paytm/oe/exceptions/BadRequestException.java`
+**Purpose**: Custom exception for bad request handling
+
+### Core Service Helper Classes
+
+#### 1. `PGServiceHelper` (Payment Gateway Service Helper)
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/pg/impl/PGServiceHelper.java`
+**Purpose**: Central helper class for Payment Gateway (PG) operations and MID (Merchant ID) management
+
+**Key Annotations**:
+- `@Service("pgServiceHelper")` - Spring service component
+- `@Transactional` - Transaction management support
+
+**Core Dependencies** (15+ services):
+- `IOEConverterService` - Data conversion services
+- `IKYBService` - Know Your Business services
+- `IOAuthGatewayService` - OAuth integration
+- `ISolutionDao` - Solution data access
+- `PGRuleEngine` - Payment gateway rule engine
+- `StringRedisTemplate` - Redis caching
+- `IMidDetailsStagingDao` - MID staging data access
+- `IOELeadService` - Lead management services
+- `IUserBusinessMappingDao` - User business mapping DAO
+- `IWorkFlowStatusDao` - Workflow status DAO
+- `IWorkflowNodeDao` - Workflow node DAO
+- `RedisServiceImpl` - Redis service implementation
+- `IAclUserDao` - Access control user DAO
+
+**Key Constants and Configuration**:
+- `MAX_LENGTH_LINE1` - 150 (Address line 1 max length)
+- `MAX_LENGTH_LINE2` - 150 (Address line 2 max length)
+- `MAX_LENGTH_LAST_NAME` - 45 (Last name max length)
+- `MAX_LENGTH_FIRST_NAME` - 45 (First name max length)
+- `MAX_LENGTH_AUTHORIZED_SIGNATORY_NAME` - 50 (Authorized signatory max length)
+- `MAX_LENGTH_BUSINESS_NAME` - 50 (Business name max length)
+- `MAX_LENGTH_CITY` - 25 (City name max length)
+- `MAX_LENGTH_DISPLAY_NAME` - 50 (Display name max length)
+- `MAX_PARAM_MATCHING_COUNT` - 4 (Maximum parameter matching count)
+- `MIN_PARAM_MATCHING_COUNT` - 1 (Minimum parameter matching count)
+
+**Core Functionality Categories**:
+
+**1. MID Creation and Management**:
+- `createPGMerchantRequest()` - Creates PG merchant creation requests
+- `editPGMerchantRequest()` - Creates PG merchant edit requests
+- `createStagingMidRequest()` - Creates staging MID requests
+- `createStagingMidRequestForEnterprise()` - Creates enterprise staging MID requests
+
+**2. Merchant Details Population**:
+- `populateMerchantDetails()` - Populates merchant details for PG requests
+- `populateAddress()` - Handles address population and validation
+- `populateAdditionalMerchantDetailsForKYCSync()` - Adds KYC sync details
+- `setNameValues()` - Sets first and last name values
+- `fetchBusinessName()` - Retrieves and validates business names
+- `fetchKYCAuthSignName()` - Gets KYC authorized signatory names
+
+**3. Rule Engine Integration**:
+- `getRuleForCategoryAndSubCategory()` - Gets PG rules for categories
+- `getAllMatchingRulesList()` - Gets all matching rules for parameters
+- `fetchMappingForCategoryAndSubCategoryRule()` - Fetches rule mappings
+- `fetchPgRuleInstrumentMappings()` - Gets PG rule instrument mappings
+- `fetchPgRuleInstrumentMappingsForDiyOnline()` - Gets DIY online mappings
+
+**4. Velocity and Limits Management**:
+- `populateMerchantVelocities()` - Sets merchant velocity limits
+- `fetchMaxAmtPerDay()` - Gets maximum amount per day
+- `fetchMaxAmtPerMonth()` - Gets maximum amount per month
+- `populateAdditionalParameters()` - Adds additional PG parameters
+
+**5. Response Processing**:
+- `createSolAddInfoEntries()` - Creates solution additional info entries
+- `processResponseInCaseOfFailure()` - Handles failure responses
+- `fetchAndSetPan()` - Fetches and sets PAN details
+- `setMerchantName()` - Sets merchant names
+- `setEDCStatus()` - Sets EDC status
+- `setAggregatorDetails()` - Sets aggregator details
+- `setKYBDetails()` - Sets KYB details
+- `setBusinessName()` - Sets business names
+- `fetchAndSetMidStatus()` - Fetches and sets MID status
+
+**6. Data Validation and Transformation**:
+- `validateMIDCallbackRequest()` - Validates MID callback requests
+- `validateUserBusinessMapping()` - Validates user business mappings
+- `trimString()` - Trims strings to specified lengths
+- `removeSpecialCharacters()` - Removes special characters
+- `removeSpecialCharactersAsPerPG()` - PG-specific character removal
+- `removeSpecialCharactersForBAHN()` - Bank account holder name cleaning
+
+**7. Utility Functions**:
+- `generateRequestId()` - Generates unique request IDs
+- `appendPaytmBankToEligibleBankQrSet()` - Adds Paytm bank to QR sets
+- `appendPtysBankToEligibleBankQrSet()` - Adds PTYS bank to QR sets
+- `isLinkPaymentsPresentInPGRequestType()` - Checks for link payments
+- `fetchCustId()` - Fetches customer IDs
+- `fetchMobileNumber()` - Fetches mobile numbers
+- `fetchPan()` - Fetches PAN details
+
+**8. Business Logic Handlers**:
+- `setP2PMerchantFlagAndUserVerifiedEmail()` - Sets P2P merchant flags
+- `populateBusinessConfigParameters()` - Populates business configuration
+- `getBusinessWalletConfig()` - Gets business wallet configuration
+- `isEditMerchantRequest()` - Determines if request is for editing
+- `getNameAsPerPan()` - Gets name as per PAN
+- `fetchEntityType()` - Fetches entity types
+
+**Key Business Rules**:
+
+**1. Solution Type Handling**:
+- Different logic for `enterprise_merchant_business`, `enterprise_merchant_parent`, `enterprise_merchant_child`
+- Special handling for `diy_mco`, `merchant_common_onboard`, `pg_profile_update`
+- Support for `p2p_100k`, `offline_50k`, `unified_payment_merchant`
+
+**2. Entity Type Processing**:
+- Special handling for `PROPRIETORSHIP` entities
+- Different logic for `INDIVIDUAL` vs `PROPRIETORSHIP`
+- Support for various business entity types
+
+**3. Address Management**:
+- Business address vs correspondence address handling
+- Billing address population
+- Address validation and trimming
+- Geographic coordinate handling
+
+**4. KYC Integration**:
+- PAN validation and fetching
+- KYB integration for business verification
+- Document type handling (PAN, TAN, Gram Panchayat ID)
+- Authorized signatory management
+
+**5. Payment Gateway Rules**:
+- Category and subcategory rule matching
+- Banking industry classification
+- Velocity limit application
+- Instrument mapping
+
+**6. Error Handling and Validation**:
+- Comprehensive validation for all input parameters
+- Length restrictions for various fields
+- Special character handling
+- Business rule validation
+
+**Integration Points**:
+
+**1. External Systems**:
+- **Payment Gateway (PG)** - MID creation and management
+- **KYB System** - Business verification and PAN fetching
+- **OAuth System** - User verification and email validation
+- **Redis Cache** - Performance optimization and caching
+
+**2. Internal Systems**:
+- **Workflow Engine** - Status tracking and transitions
+- **Rule Engine** - Business rule application
+- **DAO Layer** - Data persistence and retrieval
+- **Converter Service** - Data transformation
+
+**Performance Optimizations**:
+
+**1. Caching Strategy**:
+- Redis caching for frequently accessed data
+- Startup cache for configuration data
+- Rule engine caching for performance
+
+**2. Data Validation**:
+- Early validation to prevent downstream errors
+- Length restrictions to meet PG requirements
+- Character cleaning for compatibility
+
+**3. Batch Processing**:
+- Bulk operations for multiple merchants
+- Efficient rule matching algorithms
+- Optimized database queries
+
+**Error Handling**:
+
+**1. Exception Types**:
+- `RequestCreationException` - For request creation failures
+- `ValidationException` - For validation errors
+- `RuntimeException` - For unexpected errors
+
+**2. Error Recovery**:
+- Graceful degradation for optional features
+- Fallback mechanisms for external system failures
+- Comprehensive logging for debugging
+
+**Security Considerations**:
+
+**1. Data Protection**:
+- Sensitive data masking in logs
+- Secure handling of PAN and bank details
+- Access control integration
+
+**2. Input Validation**:
+- Comprehensive input sanitization
+- Length and format validation
+- Business rule enforcement
+
+**Code Quality Features**:
+
+**1. Modularity**:
+- Well-separated concerns
+- Reusable utility methods
+- Clear method responsibilities
+
+**2. Maintainability**:
+- Comprehensive logging
+- Clear method names
+- Extensive comments and documentation
+
+**3. Testability**:
+- Static utility methods
+- Dependency injection
+- Clear input/output contracts
+
+#### 2. `DIYMcoOnlineServiceInternalImpl` (DIY MCO Online Service)
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/services/mco/online/impl/DIYMcoOnlineServiceInternalImpl.java`
+**Purpose**: Core service implementation for DIY (Do-It-Yourself) MCO (Merchant Common Onboard) online merchant onboarding
+
+**Key Annotations**:
+- `@Service` - Spring service component
+- `@Transactional` - Transaction management with master database
+
+**Core Dependencies** (15+ services):
+- `IUserBusinessMappingDao` - User business mapping data access
+- `IRegexValidationService` - Regex validation services
+- `OECommonInternalServiceHelper` - Common internal service helper
+- `IPGGatewayService` - Payment gateway integration
+- `KycHelperService` - KYC verification services
+- `DIYMcoOnlineServiceHelper` - DIY MCO online helper
+- `OENameMatchService` - Name matching services
+- `OEValidator` - Validation services
+- `IGSTService` - GST verification services
+- `IOEConverterService` - Data conversion services
+- `IDocumentServiceInternal` - Document management services
+- `RedisServiceImpl` - Redis caching services
+
+**Core Functionality Categories**:
+
+**1. Lead Status Management**:
+- `fetchLeadStatus()` - Fetches current lead status and screen
+- Lead stage tracking and screen determination
+- Workflow stage validation and progression
+- Screen-specific business logic
+
+**2. Lead Creation and Validation**:
+- `validateCreateRequest()` - Validates lead creation requests
+- `validatePanRegex()` - PAN regex validation
+- `validateResellerParamsIfPresent()` - Reseller parameter validation
+- `fetchExistingDiyOnlineLead()` - Checks for existing leads
+- `getExistingSdMidViaCustId()` - Checks for existing MIDs
+
+**3. PAN Validation and Processing**:
+- `validatePan()` - Comprehensive PAN validation
+- PAN verification through KYC services
+- Name extraction from PAN validation
+- Error handling for PAN validation failures
+
+**4. Lead Creation Request Building**:
+- `getLeadCreationRequest()` - Builds lead creation requests
+- Shopify integration support
+- Reseller parameter handling
+- Device information population
+
+**5. Name Match Verification**:
+- `saveNameMatchVerificationStatus()` - Saves name match results
+- PAN-BAHN name matching
+- Trade name-BAHN matching
+- Legal name-BAHN matching
+- Bank verification status updates
+
+**6. Additional Details Validation**:
+- `validateAdditionalRequest()` - Validates additional details
+- Address validation (correspondence, registered, billing)
+- GST validation and verification
+- Owner details validation
+- Web/App URL validation
+
+**7. Address Management**:
+- `validateAddress()` - Address validation
+- Multiple address type support
+- Address format validation
+- Geographic validation
+
+**8. GST Integration**:
+- `validateGstin()` - GSTIN validation
+- GST API integration
+- PAN-GSTIN matching
+- GST exemption handling
+
+**9. Business Owner Management**:
+- `validateOwnerDetails()` - Owner details validation
+- Multiple ownership types support
+- SPOC (Single Point of Contact) validation
+- Director validation for companies
+
+**10. Data Object Creation**:
+- `createOrUpdateAdditionalDetailsObject()` - Creates additional details objects
+- `getRetailRelatedBusinessSRO()` - Retail business object creation
+- `getBusinessSRO()` - Business object creation
+- `getBusinessOwnersFromContactDetails()` - Business owner object creation
+
+**11. Workflow Management**:
+- `saveUbmAndUpdateWorkflow()` - Saves UBM and updates workflow
+- `saveTncUpdateWorkflow()` - TNC acceptance workflow
+- Stage progression management
+- Workflow validation
+
+**12. Response Handling**:
+- `handleLeadResponse()` - Lead response processing
+- `handleAdditionalDetailsResponse()` - Additional details response
+- Data transformation and mapping
+- Error response handling
+
+**Key Business Rules**:
+
+**1. Lead Status Logic**:
+- **LEAD_CREATED** → Business PAN Details Screen
+- **TNC_ACCEPT_SUCCESS** → Additional Details/Bank Account Details Screen
+- **LEAD_POSTED** → Web App Details/Contact Details/SPOC Details/Upload Document Screen
+- **DOCUMENT_UPLOADED** → Upload Document/Review/Document Verification Screen
+- **QC Stages** → Document Verification Screen
+- **Web App Verification** → Web App Verification Screen
+- **Agreement Stages** → Agreement Screen
+- **PG Callback** → MID Created Screen
+
+**2. Validation Rules**:
+- **PAN Validation**: Regex validation + KYC service validation
+- **GST Validation**: PAN-GSTIN matching + GST API verification
+- **Address Validation**: Format validation + geographic validation
+- **Owner Validation**: Entity-specific owner requirements
+- **URL Validation**: Web/App URL format validation
+
+**3. Entity-Specific Logic**:
+- **PROPRIETORSHIP**: Special GST and name matching rules
+- **PRIVATE_LIMITED/PUBLIC_LIMITED**: Director validation (minimum 3 owners)
+- **Other Entities**: Minimum 2 owners required
+
+**4. Shopify Integration**:
+- Reseller parameter validation
+- Shopify shop ID validation
+- Access token and code validation
+- Gateway-specific workflow handling
+
+**5. Name Matching Logic**:
+- **PAN-BAHN**: Direct name matching
+- **Trade Name-BAHN**: Business trade name matching
+- **Legal Name-BAHN**: Legal entity name matching
+- **Proprietorship**: Trade name OR Legal name matching
+- **Other Entities**: Trade name OR Legal name OR PAN matching
+
+**Integration Points**:
+
+**1. External Systems**:
+- **KYC Services** - PAN validation and verification
+- **GST Services** - GSTIN verification and data fetching
+- **Payment Gateway** - MID validation and creation
+- **Redis Cache** - Configuration and feature flags
+
+**2. Internal Systems**:
+- **Workflow Engine** - Stage progression and validation
+- **Document Service** - Document upload and verification
+- **Validation Service** - Regex and format validation
+- **Converter Service** - Data transformation
+
+**Performance Optimizations**:
+
+**1. Caching Strategy**:
+- Redis caching for configuration data
+- Feature flag caching
+- Session data caching
+
+**2. Database Optimization**:
+- Transaction management for data consistency
+- Lazy loading for large data sets
+- Efficient query patterns
+
+**3. Validation Optimization**:
+- Early validation to prevent downstream processing
+- Batch validation where possible
+- Cached validation results
+
+**Error Handling**:
+
+**1. Validation Errors**:
+- Comprehensive input validation
+- Business rule validation
+- External service validation
+
+**2. Workflow Errors**:
+- Stage progression validation
+- Workflow rule enforcement
+- Rollback mechanisms
+
+**3. External Service Errors**:
+- KYC service failure handling
+- GST API failure handling
+- Payment gateway error handling
+
+**Security Considerations**:
+
+**1. Data Protection**:
+- PAN encryption and decryption
+- Sensitive data masking
+- Access control validation
+
+**2. Input Sanitization**:
+- Comprehensive input validation
+- SQL injection prevention
+- XSS prevention
+
+**3. Authentication**:
+- User authentication validation
+- Session management
+- Authorization checks
+
+**Code Quality Features**:
+
+**1. Modularity**:
+- Well-separated concerns
+- Reusable validation methods
+- Clear method responsibilities
+
+**2. Maintainability**:
+- Comprehensive logging
+- Clear method names
+- Extensive error handling
+
+**3. Testability**:
+- Dependency injection
+- Clear input/output contracts
+- Mockable external dependencies
+
+**Business Process Flow**:
+
+**1. Lead Creation**:
+- PAN validation → Lead creation → TNC acceptance
+- Additional details → Bank details → Web/App details
+- Contact details → SPOC details → Document upload
+
+**2. Verification Process**:
+- Document verification → QC allocation → QC action
+- Web app verification → Risk assessment → AML check
+- Agreement generation → MID creation
+
+**3. Error Handling**:
+- Validation failures → User feedback
+- Workflow failures → Rollback mechanisms
+- External service failures → Fallback options
+
+## Update Flows and Modification System
+
+### Overview of Update Flows
+
+The Paytm OE system supports comprehensive update and modification capabilities for existing merchant leads. The update flows are designed to handle various types of modifications while maintaining data integrity and audit trails.
+
+### Core Update Flow Architecture
+
+#### 1. Modification Flow Types (`ModificationFlow` Enum)
+**Location**: `oe-base/src/main/java/com/paytm/oe/enums/ModificationFlow.java`
+
+**Primary Modification Flows**:
+- `enrichment_flow` - Data enrichment and product detail updates
+- `bank_update` - Bank account information updates
+- `gstin_address_update` - GSTIN and address updates
+- `spoc_modification` - SPOC (Single Point of Contact) updates
+- `mdr_update` - MDR (Merchant Discount Rate) updates
+- `cat_subcat_modification` - Category and subcategory updates
+- `model_sub_model_update` - Model and sub-model updates
+- `settlement_type_update` - Settlement type updates
+- `txn_flow_modification` - Transaction flow modifications
+
+**Parent-Specific Flows**:
+- `parent_bank_update` - Parent entity bank updates
+- `parent_spoc_modification` - Parent entity SPOC updates
+- `parent_cat_subcat_modification` - Parent entity category updates
+- `parent_mdr_update` - Parent entity MDR updates
+- `parent_cft_update` - Parent entity CFT updates
+
+**Address-Specific Flows**:
+- `registered_address_update` - Registered address updates
+- `correspondence_address_update` - Correspondence address updates
+
+**Specialized Flows**:
+- `add_rental_plan` - Rental plan additions
+- `rental_plan_deactivation` - Rental plan deactivations
+- `trigger_addendum` - Addendum triggering
+- `ecode_modification` - E-code modifications
+
+### Update Flow Controllers
+
+#### 1. `BulkUpdateController` (Bulk Operations)
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/controllers/oe/BulkUpdateController.java`
+**Purpose**: Handles bulk update operations for enterprise leads
+
+**Key Endpoints**:
+- `POST /v1/update/bulkEnterpriseModification` - Bulk enterprise modifications
+- `POST /v1/update/bulkEnterpriseSolution` - Bulk enterprise solution updates
+- `POST /v1/update/bulkEnterpriseMigration` - Bulk enterprise migration
+- `POST /v1/update/bulkEnterpriseChild` - Bulk child lead creation
+
+**Core Dependencies**:
+- `OEEnterpriseBulkModificationService` - Bulk modification processing
+- `OEEnterpriseBulkChildLeadCreationService` - Child lead creation
+- `OEEnterpriseBulkSolutionLeadCreationService` - Solution lead creation
+- `StringRedisTemplate` - Distributed locking
+
+**Key Features**:
+- **Distributed Locking**: Prevents concurrent modifications
+- **Bulk Processing**: Handles multiple leads simultaneously
+- **Validation**: Comprehensive request validation
+- **Error Handling**: Graceful error recovery
+
+#### 2. `SolutionLeadController` (Individual Updates)
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/controllers/panel/kam/SolutionLeadController.java`
+**Purpose**: Handles individual lead updates and modifications
+
+**Update Endpoints**:
+- `PUT /panel/v1/solution/lead` - Update existing lead
+- `POST /panel/v1/solution/createUpdateLead` - Combined create/update
+- `POST /panel/v1/solution/lead/validate` - Validate lead data
+
+### Update Flow Service Implementations
+
+#### 1. `EnrichmentFlowModificationFlowServiceImpl` (Enrichment Flow)
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java`
+**Purpose**: Handles data enrichment and product detail modifications
+
+**Key Functionality**:
+- **Product Detail Updates**: MDR, CFT, ICT, settlement types
+- **Validation**: UPI/CC paymode validation for small merchants
+- **Workflow Management**: Stage progression and validation
+- **Audit Trail**: Comprehensive modification tracking
+
+**Core Methods**:
+- `updateDetails()` - Main update processing
+- `childLeadModification()` - Child lead modifications
+- `validateAndCreateRequestForBulk()` - Bulk validation
+- `updatingSAIFlagsBasedOnRequestAndUBM()` - Flag updates
+
+**Business Rules**:
+- **Stage Validation**: Only allows modifications at specific stages
+- **Agent Validation**: Prevents unauthorized modifications
+- **Partial Save**: Supports incremental updates
+- **Workflow Versioning**: Maintains workflow version compatibility
+
+#### 2. `BankUpdateModificationFlowServiceImpl` (Bank Updates)
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java`
+**Purpose**: Handles bank account information updates
+
+**Key Functionality**:
+- **Bank Detail Validation**: Account number, IFSC, holder name validation
+- **Settlement Type Validation**: Aggregator child bank update restrictions
+- **Workflow Integration**: Stage progression and validation
+- **Bulk Processing**: Support for bulk bank updates
+
+**Validation Rules**:
+- **Entity Restrictions**: Only child and parent entities allowed
+- **Settlement Type**: Aggregator children have restrictions
+- **Bank Verification**: Penny drop and name matching validation
+
+#### 3. `SpocModificationFlowServiceImpl` (SPOC Updates)
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java`
+**Purpose**: Handles SPOC (Single Point of Contact) modifications
+
+**Key Functionality**:
+- **SPOC Validation**: Contact details and authorization validation
+- **Stage Restrictions**: Limited to specific workflow stages
+- **Agent Validation**: Prevents unauthorized modifications
+- **Workflow Management**: Stage progression handling
+
+### Bulk Update Services
+
+#### 1. `OEEnterpriseBulkModificationService`
+**Location**: `MerchantService/src/main/java/com/paytm/merchant/offline/helper/service/OEEnterpriseBulkModificationService.java`
+**Purpose**: Orchestrates bulk modification operations
+
+**Key Functionality**:
+- **Request Validation**: Comprehensive input validation
+- **Service Routing**: Routes to appropriate modification services
+- **Error Handling**: Bulk error processing and reporting
+- **Transaction Management**: Ensures data consistency
+
+**Core Methods**:
+- `validateAndPerformModification()` - Main bulk modification logic
+- `fetchUBM()` - User business mapping retrieval
+- `returnSuccessResponse()` - Success response generation
+
+#### 2. `EnterpriseModificationProcessor`
+**Location**: `oe-panel-service/src/main/java/com/paytm/oe/agent/services/fileupload/impl/EnterpriseModificationProcessor.java`
+**Purpose**: Processes file-based bulk modifications
+
+**Key Functionality**:
+- **File Processing**: CSV/Excel file processing
+- **Record Validation**: Individual record validation
+- **Bulk Execution**: Mass modification execution
+- **Error Reporting**: Detailed error reporting
+
+### Update Flow Validation System
+
+#### 1. Stage-Based Validation
+**Validation Rules**:
+- **LEAD_POSTED**: Allows most modifications
+- **LEAD_PARTIALLY_CLOSED**: Limited modifications
+- **QC Stages**: Restricted modifications
+- **PG Callback**: No modifications allowed
+
+#### 2. Entity-Based Validation
+**Entity Restrictions**:
+- **Child Entities**: Can modify bank, SPOC, category details
+- **Parent Entities**: Can modify parent-specific fields
+- **Solution Types**: Different rules for different solutions
+
+#### 3. Agent-Based Validation
+**Agent Restrictions**:
+- **Creator Agent**: Full modification rights
+- **Other Agents**: Limited modification rights
+- **Authorization**: Role-based access control
+
+### Update Flow Workflow Integration
+
+#### 1. Workflow Stage Progression
+**Stage Transitions**:
+- **Modification Initiation**: Sets modification flow flags
+- **Validation**: Validates modification eligibility
+- **Processing**: Executes modification logic
+- **Completion**: Updates workflow status
+
+#### 2. Workflow Version Management
+**Version Control**:
+- **Workflow Versioning**: Maintains version compatibility
+- **Stage Validation**: Ensures stage compatibility
+- **Rollback Support**: Version-based rollback
+
+### Update Flow Audit and Tracking
+
+#### 1. Audit Trail System
+**Audit Features**:
+- **Modification Tracking**: Complete modification history
+- **Field-Level Auditing**: Individual field change tracking
+- **Agent Tracking**: Modification agent identification
+- **Timestamp Tracking**: Modification timing
+
+#### 2. Change Management
+**Change Control**:
+- **Before/After Values**: Field value comparison
+- **Reason Tracking**: Modification reason capture
+- **Approval Workflow**: Multi-level approval process
+- **Rollback Capability**: Change reversal support
+
+### Update Flow Error Handling
+
+#### 1. Validation Errors
+**Error Types**:
+- **Input Validation**: Format and content validation
+- **Business Rule Validation**: Business logic validation
+- **Stage Validation**: Workflow stage validation
+- **Entity Validation**: Entity-specific validation
+
+#### 2. Processing Errors
+**Error Handling**:
+- **Transaction Rollback**: Automatic rollback on errors
+- **Partial Success**: Handles partial update failures
+- **Error Reporting**: Detailed error messages
+- **Retry Mechanisms**: Automatic retry logic
+
+### Update Flow Performance Optimizations
+
+#### 1. Bulk Processing
+**Optimization Features**:
+- **Batch Processing**: Efficient bulk operations
+- **Parallel Processing**: Concurrent modification handling
+- **Caching**: Frequently accessed data caching
+- **Database Optimization**: Optimized queries
+
+#### 2. Resource Management
+**Resource Optimization**:
+- **Connection Pooling**: Database connection management
+- **Memory Management**: Efficient memory usage
+- **Lock Management**: Distributed locking for concurrency
+- **Timeout Handling**: Request timeout management
+
+### Update Flow Security
+
+#### 1. Access Control
+**Security Features**:
+- **Authentication**: User authentication validation
+- **Authorization**: Role-based access control
+- **Session Management**: Secure session handling
+- **Audit Logging**: Security event logging
+
+#### 2. Data Protection
+**Data Security**:
+- **Encryption**: Sensitive data encryption
+- **Masking**: Data masking in logs
+- **Validation**: Input sanitization
+- **Access Logging**: Data access tracking
+
+### Update Flow Integration Points
+
+#### 1. External System Integration
+**Integration Points**:
+- **Payment Gateway**: MID updates and modifications
+- **KYC Services**: Verification updates
+- **GST Services**: GSTIN validation updates
+- **Bank Services**: Bank account verification
+
+#### 2. Internal System Integration
+**Internal Integration**:
+- **Workflow Engine**: Stage progression and validation
+- **Document Service**: Document updates and verification
+- **Audit Service**: Modification tracking and logging
+- **Notification Service**: Update notifications
+
+### Update Flow Business Process
+
+#### 1. Modification Request Process
+**Process Flow**:
+1. **Request Initiation**: Agent initiates modification request
+2. **Validation**: System validates request eligibility
+3. **Processing**: Modification logic execution
+4. **Workflow Update**: Stage progression and status update
+5. **Notification**: Stakeholder notification
+6. **Audit Logging**: Complete audit trail creation
+
+#### 2. Bulk Modification Process
+**Bulk Process Flow**:
+1. **File Upload**: Bulk modification file upload
+2. **Validation**: File format and content validation
+3. **Processing**: Batch processing of modifications
+4. **Error Handling**: Error collection and reporting
+5. **Success Reporting**: Success summary generation
+6. **Audit Logging**: Bulk operation audit trail
+
+### Update Flow Monitoring and Analytics
+
+#### 1. Performance Monitoring
+**Monitoring Metrics**:
+- **Processing Time**: Modification processing duration
+- **Success Rate**: Modification success percentage
+- **Error Rate**: Error occurrence frequency
+- **Throughput**: Modifications per time unit
+
+#### 2. Business Analytics
+**Analytics Features**:
+- **Modification Trends**: Modification pattern analysis
+- **Agent Performance**: Agent modification statistics
+- **Error Analysis**: Error pattern identification
+- **Workflow Efficiency**: Workflow performance metrics
+
+## SQL Files and Database Scripts Analysis
+
+### Overview of SQL_Files Directory
+
+The `SQL_Files` directory contains comprehensive database scripts, stored procedures, and queries that support the Paytm OE system's database operations, workflow management, and business logic implementation. These files are organized by feature areas and change request numbers (COP-XXXXX).
+
+### Directory Structure and Organization
+
+#### 1. Root Level SQL Files
+**Key Files**:
+- `commercialsRejectedOnlineQueries.sql` - Workflow edge management for commercial rejections
+- `COP-31317.sql` - Risk assessment (RA) questions and workflow procedures
+- `COP-31285.sql` - Large enterprise enhancement script (29KB, 187 lines)
+- `COP-31833.sql` - Massive system update script (429KB, 2991 lines)
+- `COP-31493.sql` - Enterprise system enhancements (20KB, 172 lines)
+
+#### 2. Feature-Specific Directories
+
+**DIY_ONLINE Directory**:
+- **COP-30691_diy_online_queries/** - Initial DIY online implementation
+- **COP-31307_Phase2_queries/** - Phase 2 enhancements
+- **COP-31793_Phase2-1_queries/** - Phase 2.1 updates
+- **COP-31794_diy_online_phase_3/** - Phase 3 implementation
+- **COP-32632_diy_online_shopify/** - Shopify integration
+
+**PPSL-Queries Directory**:
+- `COP-33221_missingWfOnline_banklob_andkybEdit_queries.sql` - Missing workflow edges
+- `COP-33221_mit_bhApproval_queries.sql` - MIT business head approval queries
+
+**Enterprise_Enhancements_Queries Directory**:
+- `bankingModuleLeadRemoval.sql` - Banking module lead removal
+- `cpvChanges.sql` - CPV (Customer Profile Verification) changes
+- `onlineMaquetteLimitFramework.sql` - Online Maquette limit framework
+- `onlinedocumentsupdate.sql` - Online document updates
+
+**offline-payment Directory**:
+- **COP-32014/** - Offline payment enhancements
+- **COP-33972/** - Offline payment updates
+- **COP-34337/** - Additional offline features
+- **DIY_MCO/** - DIY MCO offline features
+
+### Key SQL Script Categories
+
+#### 1. Workflow Management Scripts
+
+**Workflow Edge Creation**:
+```sql
+-- commercialsRejectedOnlineQueries.sql
+CREATE PROCEDURE InsertCommercialsRejectedWorkflowEdge(IN entityType VARCHAR(255))
+BEGIN
+    -- Creates workflow edges for commercial rejection handling
+    -- Supports all entity types: PROPRIETORSHIP, PUBLIC_LIMITED, etc.
+END
+```
+
+**Workflow Node Management**:
+- **Stage Transitions**: Defines transitions between workflow stages
+- **Condition Logic**: Implements business logic for stage progression
+- **Entity-Specific Rules**: Different workflows for different entity types
+
+#### 2. Risk Assessment (RA) Implementation
+
+**RA Questions Mapping**:
+```sql
+-- COP-31317.sql
+INSERT INTO solution_question_mapping 
+(is_active, is_mandatory, question_type, page_name, solution_type, weight, question_id, entity_type, is_curable) 
+VALUES ('1', '1', 'RA_WEB', '1', 'diy_online_mco', '60', '2440', entityType, '0');
+```
+
+**Key Features**:
+- **Question Types**: RA_WEB, RA_APP for different platforms
+- **Weight System**: Different weights (40, 60) for question importance
+- **Entity Coverage**: All entity types supported
+- **Mandatory Questions**: Required questions for risk assessment
+
+#### 3. DIY Online Workflow Implementation
+
+**Phase 2 Workflow Edges**:
+```sql
+-- workflow_phase2_Queries.sql
+CREATE PROCEDURE InsertWorkflowEdgeForEntityType(
+    In SolutionType VARCHAR(50),
+    In EntityType VARCHAR(50)
+)
+```
+
+**Workflow Stages**:
+- **PG_POST**: Payment gateway post-processing
+- **PG_CALLBACK**: Payment gateway callback handling
+- **KYB_POST**: Know Your Business post-processing
+- **PG_ADD_CHANNEL**: Payment gateway channel addition
+
+#### 4. Enterprise Enhancements
+
+**Maquette Limit Framework**:
+```sql
+-- onlineMaquetteLimitFramework.sql
+UPDATE reference_data
+SET salesforce_field = CONCAT(salesforce_field, ',MAQUETTE_LIMIT_ENABLED')
+WHERE ref_type = 'LEAD_SAI_KEYS_TO_COPY'
+AND ref_value = 'enterprise_merchant_business-enterprise_merchant_parent';
+```
+
+**Key Configurations**:
+- **Risk Engine Integration**: Risk assessment framework
+- **Limit Management**: Transaction limit configurations
+- **Vertical Mapping**: Business vertical to account source mapping
+- **Document Categories**: Business document categorization
+
+#### 5. PPSL (Paytm Payment Services Limited) Queries
+
+**Missing Workflow Edges**:
+```sql
+-- COP-33221_missingWfOnline_banklob_andkybEdit_queries.sql
+CREATE PROCEDURE InsertWorkflowEdgesForEntityType(
+    In entityType VARCHAR(50)
+)
+```
+
+**Features**:
+- **Bank LOB Integration**: Banking line of business workflow
+- **KYB Edit Support**: Know Your Business editing capabilities
+- **Panel Success Handling**: Panel success stage management
+
+### Database Schema Modifications
+
+#### 1. Reference Data Management
+
+**Configuration Data**:
+```sql
+INSERT INTO reference_data 
+(ref_type, ref_value, ref_id, status, salesforce_field, sequence_id, data_consumer) 
+VALUES
+('MAQUETTE_FLAGS_ENABLED', 'ENTERPRISE_MERCHANT_ONBOARD', 0, now(), now(), 1, 
+ "[\"entity_type\",\"verticalName\",\"pan_type\",...]", 1, 'OE');
+```
+
+**Key Reference Types**:
+- **MAQUETTE_FLAGS_ENABLED**: Feature flags for Maquette system
+- **gstinProofDocument**: GSTIN proof document types
+- **companyAddressProof**: Company address proof documents
+- **licenseProof**: License proof document types
+
+#### 2. Workflow Definition Updates
+
+**Solution Configuration**:
+```sql
+UPDATE pg_solution_details 
+SET static_configs = '{"UPDATE_MDRS":"...","UPDATE_REQUEST_FOR_ONLINE":"...",...}'
+WHERE solution_key = 'enterprise_merchant_parent';
+```
+
+**Configuration Areas**:
+- **MDR Management**: Merchant Discount Rate handling
+- **Request Processing**: Online request processing
+- **Handler Configuration**: Custom handler IDs
+- **Risk Engine**: Risk assessment engine configuration
+
+#### 3. Question Mapping System
+
+**Solution Question Mapping**:
+```sql
+INSERT INTO solution_question_mapping 
+(is_active, is_mandatory, question_type, page_name, solution_type, weight, question_id, entity_type, is_curable)
+```
+
+**Mapping Features**:
+- **Question Types**: Different question categories
+- **Weight System**: Question importance weighting
+- **Entity Coverage**: Entity-specific questions
+- **Curability**: Question correction capabilities
+
+### Business Logic Implementation
+
+#### 1. Workflow Stage Transitions
+
+**Condition-Based Transitions**:
+```sql
+'{"nextStageCondition":{"operator":"AND","conditions":{"AGENT_ALLOCATION_SUCCESS":"TRUE","DEVICE_RENTAL_QC_REQUIRED":"FALSE","BANK_LOB":"TRUE"}}}'
+```
+
+**Transition Logic**:
+- **Operator Support**: AND/OR conditions
+- **Condition Evaluation**: Business rule evaluation
+- **Action Triggers**: Automatic action execution
+- **Replay Capability**: Retry mechanisms
+
+#### 2. Risk Assessment Framework
+
+**Question Weighting**:
+- **High Weight (60)**: Critical risk assessment questions
+- **Medium Weight (40)**: Standard risk questions
+- **Mandatory Questions**: Required for all entities
+- **Platform-Specific**: Web vs App specific questions
+
+#### 3. Document Management
+
+**Document Categories**:
+- **GSTIN Proof**: GST registration documents
+- **Company Address**: Business address verification
+- **License Proof**: Business license documents
+- **Financial Documents**: Income tax returns, etc.
+
+### Performance and Optimization
+
+#### 1. Stored Procedure Usage
+
+**Benefits**:
+- **Performance**: Optimized query execution
+- **Maintainability**: Centralized business logic
+- **Reusability**: Parameterized procedures
+- **Transaction Management**: Atomic operations
+
+#### 2. Batch Processing
+
+**Efficiency Features**:
+- **Bulk Inserts**: Efficient data insertion
+- **Batch Updates**: Optimized update operations
+- **Transaction Batching**: Reduced database load
+- **Error Handling**: Comprehensive error management
+
+### Security and Data Integrity
+
+#### 1. Data Validation
+
+**Validation Rules**:
+- **Entity Type Validation**: Valid entity type checking
+- **Solution Type Validation**: Valid solution type verification
+- **Workflow Validation**: Workflow integrity checking
+- **Reference Data Validation**: Reference data consistency
+
+#### 2. Audit Trail
+
+**Audit Features**:
+- **Created/Updated Tracking**: Timestamp tracking
+- **User Tracking**: User identification
+- **Change Logging**: Complete change history
+- **Version Control**: Data version management
+
+### Integration Points
+
+#### 1. Salesforce Integration
+
+**Data Mapping**:
+```sql
+salesforce_field = '[\"entity_type\",\"verticalName\",\"pan_type\",\"business_pan_verification_status\",...]'
+```
+
+**Integration Areas**:
+- **Lead Data**: Lead information synchronization
+- **Document Status**: Document verification status
+- **Business Metrics**: Business performance data
+- **Risk Scores**: Risk assessment results
+
+#### 2. Payment Gateway Integration
+
+**PG Configuration**:
+- **Solution Details**: Payment gateway solution configuration
+- **Risk Engine**: Risk assessment integration
+- **Limit Framework**: Transaction limit management
+- **Channel Management**: Payment channel configuration
+
+### Maintenance and Deployment
+
+#### 1. Version Control
+
+**Change Management**:
+- **COP Numbers**: Change request tracking
+- **Phase Management**: Phased deployment support
+- **Rollback Support**: Change reversal capabilities
+- **Testing Support**: Test data management
+
+#### 2. Environment Management
+
+**Environment Support**:
+- **Development**: Development environment scripts
+- **Staging**: Staging environment deployment
+- **Production**: Production environment management
+- **Migration**: Data migration scripts
+
+### Key Insights from SQL Analysis
+
+#### 1. System Complexity
+- **Extensive Workflow Management**: Complex workflow state machine
+- **Multi-Entity Support**: Support for 15+ entity types
+- **Risk Assessment Integration**: Comprehensive risk evaluation
+- **Document Management**: Sophisticated document handling
+
+#### 2. Business Rules Implementation
+- **Condition-Based Logic**: Complex business rule evaluation
+- **Entity-Specific Rules**: Different rules for different entities
+- **Workflow Versioning**: Workflow version management
+- **Integration Points**: Multiple external system integrations
+
+#### 3. Scalability Considerations
+- **Batch Processing**: Efficient bulk operations
+- **Stored Procedures**: Optimized database operations
+- **Reference Data**: Centralized configuration management
+- **Caching Strategy**: Performance optimization
+
+#### 4. Compliance and Security
+- **Audit Trails**: Complete change tracking
+- **Data Validation**: Comprehensive validation rules
+- **Access Control**: Role-based access management
+- **Data Encryption**: Sensitive data protection
+
+## Workflow Process Flow
+
+### 1. Lead Creation Phase
+1. **CAM Agent** creates Business Lead via OE Panel
+2. **System** generates unique `lead_id` (UUID)
+3. **Workflow** starts at `GG - LEAD_CREATED` stage
+4. **Documents** uploaded and validated
+
+### 2. Quality Control Phase
+1. **Lead** moves to `QC - QC_ACTION_PENDING`
+2. **QC Agent** reviews submitted data
+3. **Validation** of business documents and information
+4. **Approval/Rejection** decision made
+
+### 3. KYB Processing Phase
+1. **KYB System** receives validated data
+2. **Business Verification** performed
+3. **Data Enrichment** from external sources
+4. **Wallet ID** assignment and editing
+
+### 4. BOSS Integration Phase
+1. **BOSS System** receives enriched data
+2. **Final Validation** and compliance checks
+3. **Merchant ID (MID)** generation
+4. **Callback** to OE system with results
+
+### 5. Completion Phase
+1. **MID** assigned to merchant
+2. **Workflow** moves to `LEAD_CLOSED - LEAD_SUCCESSFULLY_CLOSED`
+3. **Notification** sent to relevant parties
+4. **Audit Trail** completed
+
+## Solution Types and Entity Types
+
+### Solution Types (Enterprise Focus)
+- `enterprise_merchant_business` - Main business entity
+- `enterprise_merchant_parent` - Parent company
+- `enterprise_merchant_child` - Subsidiary/child company
+- `enterprise_merchant_cmt_staging` - CMT staging process
+- `enterprise_merchant_cpv` - CPV (Customer Profile Verification)
+- `enterprise_merchant_sap` - SAP integration
+- `enterprise_merchant_aml` - AML (Anti-Money Laundering)
+
+### Entity Types (Legal Structures)
+- `PROPRIETORSHIP` - Individual proprietorship
+- `PUBLIC_LIMITED` - Public limited company
+- `PRIVATE_LIMITED` - Private limited company
+- `TRUST` - Trust organization
+- `HINDU_UNDIVIDED_FAMILY` - HUF
+- `LIMITED_LIABILITY_PARTNERSHIP` - LLP
+- `PARTNERSHIP` - Partnership firm
+- `ASSOCIATION_OF_PERSONS` - AOP
+- `SOCIETY_ASSOCIATION_CLUB` - Society/Association
+- `GOVERNMENT` - Government entity
+
+## Key Business Rules and Validations
+
+### 1. Workflow Transitions
+- Strict stage progression enforced
+- Rollback capabilities for rejected leads
+- Parallel processing for sub-workflows
+- Timeout handling for pending actions
+
+### 2. Document Management
+- Multiple document types supported
+- Version control and audit trail
+- Validation against business rules
+- Integration with external verification systems
+
+### 3. Data Validation
+- Business logic validation
+- Compliance checks
+- Cross-reference validation
+- Real-time validation feedback
+
+### 4. Security and Access Control
+- Role-based access control
+- Audit trail for all changes
+- Data encryption for sensitive information
+- Session management and timeout
+
+## Integration Points
+
+### 1. External Systems
+- **BOSS System** - Final validation and MID generation
+- **KYB System** - Business verification and enrichment
+- **PG Systems** - Payment gateway callbacks
+- **Document Verification** - External document validation
+
+### 2. Internal Systems
+- **OE Panel** - User interface for agents
+- **Notification System** - Email/SMS notifications
+- **Audit System** - Comprehensive audit trail
+- **Reporting System** - Analytics and reporting
+
+## Performance and Scalability
+
+### 1. Database Optimization
+- Indexed foreign keys for performance
+- Partitioned tables for large datasets
+- Query optimization for complex joins
+- Connection pooling for high concurrency
+
+### 2. Caching Strategy
+- Redis caching for frequently accessed data
+- Session caching for user data
+- Query result caching for reports
+- Configuration caching for system settings
+
+### 3. Monitoring and Alerting
+- Performance metrics tracking
+- Error rate monitoring
+- SLA compliance tracking
+- Automated alerting for issues
+
+## System Features and Capabilities
+
+### 1. Migration Support
+- **PPSL Migration**: Support for Paytm Payment Services Limited migration
+- **Database Schema**: Flexible schema design for migration scenarios
+- **Workflow Adaptability**: Configurable workflows for different business needs
+
+### 2. Business Process Management
+- **Bulk Operations**: Support for bulk lead processing and updates
+- **Enhanced Validation**: Comprehensive business rule validation
+- **Error Handling**: Robust error management and recovery
+
+### 3. System Integration
+- **Multi-System Integration**: Seamless integration with external systems
+- **API Management**: RESTful APIs for all operations
+- **Data Synchronization**: Real-time data synchronization across systems
+
+## Recommendations and Observations
+
+### 1. System Strengths
+- **Comprehensive Audit Trail**: Complete history tracking
+- **Flexible Workflow Engine**: Adaptable to business changes
+- **Robust Data Model**: Well-structured entity relationships
+- **Scalable Architecture**: Supports high-volume processing
+
+### 2. Areas for Improvement
+- **Documentation**: More comprehensive API documentation needed
+- **Testing Coverage**: Enhanced unit and integration testing
+- **Performance Monitoring**: Better real-time performance tracking
+- **Error Handling**: More granular error categorization
+
+### 3. Future Considerations
+- **Microservices Migration**: Consider breaking into smaller services
+- **API Versioning**: Implement proper API versioning strategy
+- **Event-Driven Architecture**: Move towards event-based processing
+- **Enhanced Analytics**: Better business intelligence capabilities
+
+## Conclusion
+
+The Paytm Onboarding Enterprise (OE) system is a sophisticated, well-architected platform that successfully handles the complex process of merchant onboarding. With its comprehensive workflow management, robust data model, and extensive audit capabilities, it provides a solid foundation for Paytm's merchant acquisition and management processes.
+
+The system demonstrates good separation of concerns, proper use of design patterns, and scalability considerations. The architecture supports continuous improvement and system reliability through its modular design and comprehensive audit capabilities.
+
+---
+
+**Document Version**: 1.0  
+**Last Updated**: December 2024  
+**Analysis Period**: Based on codebase review and database analysis  
+**Scope**: Paytm Onboarding Enterprise (OE) System

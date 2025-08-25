@@ -1,0 +1,875 @@
+# Paytm OE System - Complete Modification Flows Analysis
+
+## Executive Summary
+
+This document provides a comprehensive analysis of all modification flow classes in the Paytm Onboarding Enterprise (OE) system. The system supports three types of leads (Business, Solution, and Child) with specific modification flows for each type, enabling granular updates to merchant onboarding data while maintaining data integrity and audit trails.
+
+## System Architecture Overview
+
+### Lead Types and Modification Flow Structure
+
+The OE system categorizes leads into three main types:
+1. **Business Lead** - Core business entity information
+2. **Solution Lead** - Payment solution configuration and settings
+3. **Child Lead** - Sub-entities or related business units
+
+Each lead type has specific modification flows that allow authorized agents to update particular aspects of the merchant data while maintaining workflow integrity and audit compliance.
+
+## Core Interface and Architecture
+
+### IOEModificationFlowApplicationService Interface
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/IOEModificationFlowApplicationService.java`
+
+**Purpose**: Defines the contract for all modification flow implementations
+
+**Key Methods**:
+- `fetchDetails(String leadId)` - Retrieves current data for modification
+- `updateDetails(LeadType, OEApplicationObjectSRO, long, UserSRO)` - Performs the modification
+- `childLeadModification(long, Map<String, AuditValues>)` - Handles child lead modifications
+- `handleDifferentAgent(long, UserBusinessMapping)` - Agent validation
+- `updateAuditTrailData(UserBusinessMapping, DeviceInformationSRO, UserSRO)` - Audit trail management
+
+**Design Pattern**: Template Method Pattern with Strategy Pattern for different modification types
+
+## Business Lead Modification Flows
+
+### 1. RegisteredAddressUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/RegisteredAddressUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates the registered business address with comprehensive validation
+
+**Key Functionality**:
+- **Address Validation**: Comprehensive address line and pincode validation
+- **KYB Integration**: Integrates with KYB service for address verification
+- **Document Management**: Handles address proof document updates
+- **Workflow Management**: Manages stage progression and validation
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current registered address data
+- `updateDetails()` - Performs address update with validation
+- `validateAddress()` - Address validation logic
+- `updateModificationDetails()` - Updates address information
+
+**Dependencies**:
+- `OECommonInternalServiceHelper` - Common business logic
+- `OEEnterpriseHelperService` - Enterprise-specific operations
+- `KYBServiceImpl` - Address verification
+- `IUserBusinessMappingDao` - Data access
+- `IWorkFlowService` - Workflow management
+
+**Business Rules**:
+- Only allows modifications at `LEAD_POSTED` stage
+- Requires address proof documents for validation
+- Integrates with KYB service for address verification
+- Maintains audit trail for all changes
+
+### 2. DisplayNameModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/DisplayNameModificationFlowServiceImpl.java`
+
+**Purpose**: Updates the display name for business entities
+
+**Key Functionality**:
+- **Name Validation**: Regex-based name validation
+- **Business Logic**: Handles business-specific name rules
+- **Audit Trail**: Comprehensive modification tracking
+- **Agent Validation**: Prevents unauthorized modifications
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current display name
+- `updateDetails()` - Performs name update
+- `validateDisplayName()` - Name validation logic
+
+**Dependencies**:
+- `IRegexValidationService` - Regex validation
+- `OEValidator` - Business validation
+- `IAuditTrailService` - Audit trail management
+
+**Business Rules**:
+- Allows modifications at `LEAD_PARTIALLY_CLOSED` and `LEAD_POSTED` stages
+- Validates name format using regex patterns
+- Maintains modification history
+
+### 3. DealerCodeModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/DealerCodeModificationFlowServiceImpl.java`
+
+**Purpose**: Updates dealer codes for business entities
+
+**Key Functionality**:
+- **Dealer Code Validation**: Validates dealer code format and uniqueness
+- **Business Rules**: Applies dealer-specific business logic
+- **Workflow Integration**: Manages stage progression
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current dealer code
+- `updateDetails()` - Performs dealer code update
+- `validateDealerCode()` - Dealer code validation
+
+**Dependencies**:
+- `OEServiceFactoryImpl` - Service factory
+- `OEValidator` - Validation logic
+
+**Business Rules**:
+- Only allows modifications at `LEAD_POSTED` stage
+- Validates dealer code format and business rules
+
+### 4. CategorySubcategoryModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/CategorySubcategoryModificationFlowServiceImpl.java`
+
+**Purpose**: Updates business category and subcategory classifications
+
+**Key Functionality**:
+- **Category Validation**: Validates category and subcategory combinations
+- **Document Management**: Handles category-specific document requirements
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+- **Workflow Management**: Complex workflow progression logic
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current category information
+- `updateDetails()` - Performs category update
+- `childLeadModification()` - Handles child lead synchronization
+- `delinkCompanyActivityCertificateIfRequired()` - Document management
+
+**Dependencies**:
+- `CatSubCatHelperService` - Category/subcategory logic
+- `AssistedMerchantInternalServiceImpl` - Merchant services
+- `IDocumentServiceInternal` - Document management
+
+**Business Rules**:
+- Only allows modifications at `LEAD_POSTED` stage
+- Synchronizes changes across parent and child leads
+- Manages document requirements based on category changes
+- Maintains workflow version compatibility
+
+### 5. SpocModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java`
+
+**Purpose**: Updates Single Point of Contact (SPOC) information
+
+**Key Functionality**:
+- **SPOC Validation**: Validates contact details and authorization
+- **Document Management**: Handles SPOC-related documents
+- **Contact Management**: Manages multiple contact points
+- **Authorization Validation**: Validates SPOC permissions
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current SPOC information
+- `updateDetails()` - Performs SPOC update
+- `validateSpocDetails()` - SPOC validation logic
+
+**Dependencies**:
+- `OEEnterpriseCreateLeadHelperService` - Lead creation helper
+- `IDocumentServiceInternal` - Document management
+- `IAgentDao` - Agent data access
+
+**Business Rules**:
+- Validates SPOC contact information
+- Manages SPOC authorization and permissions
+- Handles SPOC-related document requirements
+
+### 6. GstinAddressUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/GstinAddressUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates GSTIN address information
+
+**Key Functionality**:
+- **GSTIN Validation**: Validates GSTIN format and authenticity
+- **Address Verification**: Integrates with GST services for address verification
+- **Document Management**: Handles GST-related documents
+- **Integration**: Integrates with external GST services
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current GSTIN address
+- `updateDetails()` - Performs GSTIN address update
+- `validateGstinAddress()` - GSTIN validation logic
+
+**Dependencies**:
+- `IGSTService` - GST service integration
+- `IMarketPlaceService` - Marketplace integration
+- `IPGGatewayService` - PG gateway integration
+
+**Business Rules**:
+- Validates GSTIN format and authenticity
+- Integrates with external GST services
+- Manages GST-related document requirements
+
+### 7. CorrespondanceAddressUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/CorrespondanceAddressUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates correspondence address information
+
+**Key Functionality**:
+- **Address Validation**: Validates correspondence address format
+- **Document Management**: Handles correspondence-related documents
+- **Consent Management**: Manages consent form requirements
+- **Workflow Integration**: Manages stage progression
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current correspondence address
+- `updateDetails()` - Performs correspondence address update
+- `validateAddress()` - Address validation logic
+
+**Dependencies**:
+- `IPGGatewayService` - PG gateway integration
+- `IDocumentServiceInternal` - Document management
+- `IOEApplicationServiceInternal` - Application services
+
+**Business Rules**:
+- Validates correspondence address format
+- Manages consent form requirements
+- Supports both business and child leads
+
+### 8. ModelSubModelUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/ModelSubModelUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates business model and sub-model classifications
+
+**Key Functionality**:
+- **Model Validation**: Validates model and sub-model combinations
+- **Business Classification**: Manages business model classifications
+- **Workflow Integration**: Manages stage progression
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current model information
+- `updateDetails()` - Performs model update
+- `validateModelSubModel()` - Model validation logic
+
+**Dependencies**:
+- `OEEnterpriseValidator` - Enterprise validation
+- `OEServiceFactoryImpl` - Service factory
+
+**Business Rules**:
+- Validates model and sub-model combinations
+- Applies business-specific classification rules
+
+## Solution Lead Modification Flows
+
+### 1. EnrichmentFlowModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java`
+
+**Purpose**: Handles comprehensive data enrichment and product detail modifications
+
+**Key Functionality**:
+- **Product Detail Updates**: MDR, CFT, ICT, settlement types, invoice types
+- **Validation**: UPI/CC paymode validation for small merchants
+- **Workflow Management**: Complex stage progression and validation
+- **Bulk Processing**: Support for bulk modifications
+- **Audit Trail**: Comprehensive modification tracking
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current enrichment data
+- `updateDetails()` - Performs enrichment update
+- `childLeadModification()` - Handles child lead modifications
+- `validateAndCreateRequestForBulk()` - Bulk validation
+- `updatingSAIFlagsBasedOnRequestAndUBM()` - Flag updates
+
+**Dependencies**:
+- `IMdrBenchmarkValidationService` - MDR validation
+- `IBankLobService` - Banking services
+- `IDocumentServiceInternal` - Document management
+
+**Business Rules**:
+- **Stage Validation**: Only allows modifications at specific stages
+- **Agent Validation**: Prevents unauthorized modifications
+- **Partial Save**: Supports incremental updates
+- **Workflow Versioning**: Maintains workflow version compatibility
+- **Product Validation**: Validates product combinations and rules
+
+**Product Detail Keys Managed**:
+- Product Type, Convenience Fee Type, Agreement Type
+- Document Waive Off, Invoice Commission Type
+- Merchant Industry Type, Integration Charges
+- VAN Prefix, International Merchant flags
+- Bank Transfer Checkout Flow, Bank Paymode Timeout
+- Agreement Waive Off, Settlement Type, Invoice SAP Type
+
+### 2. InvoiceSapUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/InvoiceSapUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates invoice SAP type configurations
+
+**Key Functionality**:
+- **SAP Type Validation**: Validates invoice SAP type configurations
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+- **Audit Trail**: Comprehensive modification tracking
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current invoice SAP type
+- `updateDetails()` - Performs SAP type update
+- `childLeadModification()` - Handles child lead synchronization
+- `populateBossDetails()` - BOSS integration
+
+**Dependencies**:
+- `IPGGatewayService` - PG gateway integration
+- `OEEnterpriseHelperService` - Enterprise helper services
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Synchronizes changes to child leads
+- Maintains workflow version compatibility
+
+### 3. SettlementTypeUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/SettlementTypeUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates settlement type configurations
+
+**Key Functionality**:
+- **Settlement Type Validation**: Validates settlement type configurations
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+- **Audit Trail**: Comprehensive modification tracking
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current settlement type
+- `updateDetails()` - Performs settlement type update
+- `childLeadModification()` - Handles child lead synchronization
+
+**Dependencies**:
+- `OEEnterpriseHelperService` - Enterprise helper services
+- `IWorkFlowService` - Workflow management
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Synchronizes changes to child leads
+- Maintains workflow version compatibility
+
+### 4. RentalPlanModificationServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/RentalPlanModificationServiceImpl.java`
+
+**Purpose**: Manages rental plan modifications and additions
+
+**Key Functionality**:
+- **Rental Plan Management**: Adds and manages rental plans
+- **Plan Validation**: Validates rental plan configurations
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+- **Partial Save Support**: Supports incremental updates
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current rental plans
+- `updateDetails()` - Performs rental plan update
+- `childLeadModification()` - Handles child lead synchronization
+- `appendInRentalPlanList()` - Plan list management
+
+**Dependencies**:
+- `OEEnterpriseHelperService` - Enterprise helper services
+- `IWorkFlowService` - Workflow management
+
+**Business Rules**:
+- Allows modifications at `LEAD_PARTIALLY_CLOSED` and `DEVICE_RENTAL_QC_REJECTED` stages
+- Supports partial save functionality
+- Synchronizes changes to child leads
+- Maintains rental plan list integrity
+
+### 5. BankUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates bank account information and settlement configurations
+
+**Key Functionality**:
+- **Bank Detail Validation**: Account number, IFSC, holder name validation
+- **Settlement Type Validation**: Aggregator child bank update restrictions
+- **Penny Drop Validation**: Bank account verification
+- **Workflow Integration**: Stage progression and validation
+- **Bulk Processing**: Support for bulk bank updates
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current bank details
+- `updateDetails()` - Performs bank update
+- `childLeadModification()` - Handles child lead synchronization
+- `isBankModificationAllowed()` - Bank modification validation
+- `populateBankDetails()` - Bank detail population
+
+**Dependencies**:
+- `IPGGatewayService` - PG gateway integration
+- `OEValidator` - Validation logic
+- `OEEnterpriseHelperService` - Enterprise helper services
+
+**Validation Rules**:
+- **Entity Restrictions**: Only child and parent entities allowed
+- **Settlement Type**: Aggregator children have restrictions
+- **Bank Verification**: Penny drop and name matching validation
+- **Account Validation**: IFSC and account number validation
+
+### 6. CftUpdateModificationServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/CftUpdateModificationServiceImpl.java`
+
+**Purpose**: Updates Cash Flow Transaction (CFT) configurations
+
+**Key Functionality**:
+- **CFT Validation**: Validates CFT configurations
+- **Agreement Waive Off**: Manages agreement waiver logic
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current CFT configuration
+- `updateDetails()` - Performs CFT update
+- `childLeadModification()` - Handles child lead synchronization
+
+**Dependencies**:
+- `IPGGatewayService` - PG gateway integration
+- `OEEnterpriseHelperService` - Enterprise helper services
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Manages agreement waiver logic
+- Synchronizes changes to child leads
+- Maintains workflow version compatibility
+
+### 7. IctUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/IctUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates Inter-Company Transaction (ICT) configurations
+
+**Key Functionality**:
+- **ICT Validation**: Validates ICT configurations
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+- **Audit Trail**: Comprehensive modification tracking
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current ICT configuration
+- `updateDetails()` - Performs ICT update
+- `childLeadModification()` - Handles child lead synchronization
+
+**Dependencies**:
+- `IPGGatewayService` - PG gateway integration
+- `OEEnterpriseHelperService` - Enterprise helper services
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Synchronizes changes to child leads
+- Maintains workflow version compatibility
+
+### 8. ECodeUpdateModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/ECodeUpdateModificationFlowServiceImpl.java`
+
+**Purpose**: Updates E-Code configurations
+
+**Key Functionality**:
+- **E-Code Validation**: Validates E-Code format and business rules
+- **Workflow Management**: Manages stage progression
+- **Business Classification**: Manages E-Code based classifications
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current E-Code
+- `updateDetails()` - Performs E-Code update
+- `validateECode()` - E-Code validation logic
+
+**Dependencies**:
+- `OEEnterpriseHelperService` - Enterprise helper services
+- `IWorkFlowService` - Workflow management
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Validates E-Code format and business rules
+- Maintains workflow version compatibility
+
+### 9. AccountSourceModificationFlowServiceImpl
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/AccountSourceModificationFlowServiceImpl.java`
+
+**Purpose**: Updates account source team configurations
+
+**Key Functionality**:
+- **Account Source Validation**: Validates account source configurations
+- **Team Management**: Manages account source team assignments
+- **Workflow Management**: Manages stage progression
+- **Child Lead Synchronization**: Synchronizes changes to child leads
+
+**Core Methods**:
+- `fetchDetails()` - Retrieves current account source configuration
+- `updateDetails()` - Performs account source update
+- `childLeadModification()` - Handles child lead synchronization
+
+**Dependencies**:
+- `OEEnterpriseHelperService` - Enterprise helper services
+- `IWorkFlowService` - Workflow management
+
+**Business Rules**:
+- Only allows modifications at `LEAD_PARTIALLY_CLOSED` stage
+- Synchronizes changes to child leads
+- Maintains workflow version compatibility
+
+## Child Lead Modification Flows
+
+### 1. DisplayNameModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates display name for child leads
+
+**Key Functionality**:
+- **Name Validation**: Validates display name format
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+- **Parent Synchronization**: Synchronizes with parent lead when required
+
+**Business Rules**:
+- Validates name format using regex patterns
+- Maintains child lead specific business rules
+- Synchronizes with parent lead when required
+
+### 2. ECodeUpdateModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates E-Code for child leads
+
+**Key Functionality**:
+- **E-Code Validation**: Validates E-Code format for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+
+**Business Rules**:
+- Validates E-Code format and business rules
+- Applies child lead specific validation logic
+
+### 3. DealerCodeModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates dealer codes for child leads
+
+**Key Functionality**:
+- **Dealer Code Validation**: Validates dealer code format for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+
+**Business Rules**:
+- Validates dealer code format and business rules
+- Applies child lead specific validation logic
+
+### 4. GstinAddressUpdateModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates GSTIN address for child leads
+
+**Key Functionality**:
+- **GSTIN Validation**: Validates GSTIN format for child leads
+- **Address Verification**: Integrates with GST services for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+
+**Business Rules**:
+- Validates GSTIN format and authenticity
+- Integrates with external GST services
+- Applies child lead specific validation logic
+
+### 5. SpocModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates SPOC information for child leads
+
+**Key Functionality**:
+- **SPOC Validation**: Validates SPOC details for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+- **Contact Management**: Manages child lead specific contacts
+
+**Business Rules**:
+- Validates SPOC contact information
+- Applies child lead specific validation logic
+- Manages child lead specific contact requirements
+
+### 6. CorrespondenceAddressUpdateModificationService (Child Lead)
+
+**Location**: `oe-panel-service/src/main/java/com/paytm/oe/agent/services/enterpriseModification/impl/CorrespondenceAddressUpdateModificationService.java`
+
+**Purpose**: Updates correspondence address for child leads
+
+**Key Functionality**:
+- **Address Validation**: Validates correspondence address format for child leads
+- **Consent Management**: Manages consent form requirements for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+
+**Core Methods**:
+- `getRequestBody()` - Builds request body for child lead
+- `validateModificationFlowLevelData()` - Validates child lead data
+- `getModificationFlow()` - Returns modification flow type
+
+**Business Rules**:
+- Validates correspondence address format
+- Manages consent form requirements for child leads
+- Applies child lead specific validation logic
+
+### 7. BankUpdateModificationFlowServiceImpl (Child Lead)
+
+**Purpose**: Updates bank account information for child leads
+
+**Key Functionality**:
+- **Bank Detail Validation**: Validates bank details for child leads
+- **Settlement Type Validation**: Validates settlement type for child leads
+- **Child Lead Specific Logic**: Handles child lead specific business rules
+
+**Business Rules**:
+- Validates bank account information for child leads
+- Applies child lead specific settlement type rules
+- Maintains child lead specific validation logic
+
+## Associated Classes and Dependencies
+
+### Core Helper Services
+
+#### 1. OEEnterpriseHelperService
+
+**Location**: `oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEEnterpriseHelperService.java`
+
+**Purpose**: Central helper service for enterprise operations
+
+**Key Functionality**:
+- **Document Management**: Copy documents between leads
+- **Workflow Management**: Workflow version management
+- **Validation**: Enterprise-specific validation logic
+- **Integration**: External service integrations
+- **Data Transformation**: Data conversion and transformation
+
+**Core Methods**:
+- `copyOwnerDocumentsToBusinessLead()` - Document copying
+- `copyRbsmDocumentsToBusinessLead()` - RBSM document copying
+- `updateModificationFlowInSai()` - SAI updates
+- `getWorkflowVersion()` - Workflow version management
+- `updateMaquetteSAIKeys()` - Maquette integration
+
+**Dependencies**:
+- `IKYBGatewayService` - KYB integration
+- `IMaquetteService` - Maquette integration
+- `IPGGatewayService` - PG gateway integration
+- `IFsmGatewayService` - FSM integration
+- `IOAuthGatewayService` - OAuth integration
+
+#### 2. OECommonInternalServiceHelper
+
+**Purpose**: Common internal service operations
+
+**Key Functionality**:
+- **Data Loading**: Loads data for different lead types
+- **Validation**: Common validation logic
+- **Utility Functions**: Common utility operations
+
+#### 3. OEValidator
+
+**Purpose**: Central validation service
+
+**Key Functionality**:
+- **Business Validation**: Business rule validation
+- **Format Validation**: Data format validation
+- **Cross-field Validation**: Cross-field validation logic
+
+### Data Access Layer
+
+#### 1. IUserBusinessMappingDao
+
+**Purpose**: Primary data access interface for UserBusinessMapping
+
+**Key Methods**:
+- `fetchLeadByLeadId()` - Fetch lead by ID
+- `getLeadById()` - Get lead by ID
+- `getLeadsByCustIdWithActiveStage()` - Get leads by customer ID
+
+#### 2. IAgentDao
+
+**Purpose**: Agent data access interface
+
+**Key Methods**:
+- `getAgentByCustId()` - Get agent by customer ID
+- `getAgentPermissions()` - Get agent permissions
+
+### Workflow Management
+
+#### 1. IWorkFlowService
+
+**Purpose**: Workflow management service
+
+**Key Methods**:
+- `ifStageAllowedThenUpdate()` - Stage update validation
+- `moveToNextStageAndSaveJob()` - Stage progression
+- `getActiveStage()` - Get active stage
+
+### Audit and Security
+
+#### 1. IAuditTrailService
+
+**Purpose**: Audit trail management
+
+**Key Functionality**:
+- **Audit Configuration**: Audit configuration management
+- **Audit Events**: Audit event tracking
+- **Audit Data**: Audit data management
+
+#### 2. OEValidator
+
+**Purpose**: Security and validation
+
+**Key Functionality**:
+- **Agent Validation**: Agent authorization validation
+- **Business Validation**: Business rule validation
+- **Security Validation**: Security rule validation
+
+### External Integrations
+
+#### 1. IPGGatewayService
+
+**Purpose**: Payment Gateway integration
+
+**Key Functionality**:
+- **PG Operations**: Payment gateway operations
+- **MID Management**: Merchant ID management
+- **Transaction Processing**: Transaction processing
+
+#### 2. IKYBService
+
+**Purpose**: KYB (Know Your Business) integration
+
+**Key Functionality**:
+- **Business Verification**: Business verification
+- **Address Verification**: Address verification
+- **Document Verification**: Document verification
+
+#### 3. IGSTService
+
+**Purpose**: GST service integration
+
+**Key Functionality**:
+- **GSTIN Validation**: GSTIN validation
+- **GST Integration**: GST service integration
+
+## Business Rules and Validation
+
+### Stage-Based Validation
+
+All modification flows implement stage-based validation:
+- **Business Leads**: Most modifications allowed at `LEAD_POSTED` stage
+- **Solution Leads**: Most modifications allowed at `LEAD_PARTIALLY_CLOSED` stage
+- **Child Leads**: Inherit parent lead stage restrictions
+
+### Agent Authorization
+
+All modification flows validate agent authorization:
+- **Agent Validation**: Validates agent permissions
+- **Different Agent Handling**: Handles different agent scenarios
+- **Authorization Tracking**: Tracks authorization changes
+
+### Data Validation
+
+Comprehensive data validation across all flows:
+- **Format Validation**: Regex-based format validation
+- **Business Rule Validation**: Business-specific rule validation
+- **Cross-field Validation**: Cross-field dependency validation
+
+### Workflow Versioning
+
+All modification flows maintain workflow versioning:
+- **Version Compatibility**: Ensures workflow version compatibility
+- **Version Tracking**: Tracks workflow version changes
+- **Version Validation**: Validates version compatibility
+
+## Performance and Scalability
+
+### Caching Strategy
+
+- **Lazy Cache Reader**: Lazy loading cache strategy
+- **Redis Caching**: Redis-based caching for frequently accessed data
+- **Cache Invalidation**: Intelligent cache invalidation
+
+### Database Optimization
+
+- **Indexed Queries**: Optimized database queries with proper indexing
+- **Batch Operations**: Batch processing for bulk operations
+- **Connection Pooling**: Database connection pooling
+
+### Transaction Management
+
+- **Transactional Operations**: Proper transaction management
+- **Rollback Handling**: Comprehensive rollback handling
+- **Deadlock Prevention**: Deadlock prevention strategies
+
+## Security Considerations
+
+### Data Encryption
+
+- **Sensitive Data Encryption**: Encryption of sensitive data
+- **Decryption Services**: Secure decryption services
+- **Key Management**: Secure key management
+
+### Access Control
+
+- **Role-Based Access**: Role-based access control
+- **Permission Validation**: Permission validation
+- **Audit Logging**: Comprehensive audit logging
+
+### Input Validation
+
+- **SQL Injection Prevention**: SQL injection prevention
+- **XSS Prevention**: Cross-site scripting prevention
+- **Input Sanitization**: Input sanitization
+
+## Integration Points
+
+### External Services
+
+- **Payment Gateway**: PG integration for MID management
+- **KYB Services**: KYB integration for business verification
+- **GST Services**: GST integration for tax verification
+- **OAuth Services**: OAuth integration for authentication
+
+### Internal Services
+
+- **Document Services**: Document management services
+- **Workflow Services**: Workflow management services
+- **Audit Services**: Audit trail services
+- **Validation Services**: Validation services
+
+## Error Handling and Monitoring
+
+### Exception Handling
+
+- **Custom Exceptions**: Custom exception hierarchy
+- **Graceful Degradation**: Graceful degradation strategies
+- **Error Recovery**: Error recovery mechanisms
+
+### Monitoring and Logging
+
+- **Structured Logging**: Structured logging with proper levels
+- **Performance Monitoring**: Performance monitoring
+- **Error Tracking**: Error tracking and alerting
+
+## Recommendations
+
+### Code Quality Improvements
+
+1. **Standardization**: Standardize validation patterns across all flows
+2. **Documentation**: Improve inline documentation
+3. **Testing**: Increase unit test coverage
+4. **Code Review**: Implement strict code review processes
+
+### Performance Optimizations
+
+1. **Caching**: Implement more aggressive caching strategies
+2. **Database**: Optimize database queries and indexing
+3. **Async Processing**: Implement async processing for non-critical operations
+
+### Security Enhancements
+
+1. **Encryption**: Enhance data encryption strategies
+2. **Access Control**: Implement more granular access control
+3. **Audit Trail**: Enhance audit trail capabilities
+
+### Architecture Improvements
+
+1. **Microservices**: Consider microservices architecture for better scalability
+2. **Event-Driven**: Implement event-driven architecture for better decoupling
+3. **API Gateway**: Implement API gateway for better security and monitoring
+
+## Conclusion
+
+The Paytm OE System's modification flows provide a comprehensive and flexible framework for updating merchant onboarding data. The system maintains data integrity, provides comprehensive audit trails, and ensures proper workflow management while supporting various business requirements.
+
+The architecture is well-designed with proper separation of concerns, comprehensive validation, and robust error handling. However, there are opportunities for improvement in terms of standardization, performance optimization, and security enhancements.
+
+The system demonstrates good software engineering practices with proper use of design patterns, comprehensive validation, and robust error handling. The modular architecture allows for easy maintenance and extension of functionality.

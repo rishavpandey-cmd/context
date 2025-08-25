@@ -1,0 +1,249 @@
+# Paytm OE System - Comprehensive Excel Analysis
+
+## Table of Contents
+1. [Core Entity Classes](#core-entity-classes)
+2. [Controller Classes](#controller-classes)
+3. [Service Classes](#service-classes)
+4. [DAO Classes](#dao-classes)
+5. [API Endpoints](#api-endpoints)
+6. [Database Tables](#database-tables)
+7. [Workflow Components](#workflow-components)
+8. [Enums and Constants](#enums-and-constants)
+9. [Integration Points](#integration-points)
+10. [Business Rules](#business-rules)
+
+---
+
+## Core Entity Classes
+
+| Class Name | Location | Purpose | Key Fields | Relationships | Usage |
+|------------|----------|---------|------------|---------------|-------|
+| UserBusinessMapping | oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMapping.java | Core entity for merchant onboarding | id, lead_id, entity_type, solution_type, status, cust_id, mobile_number | One-to-Many with WorkFlowStatus, UserBusinessMappingOwner, UserBusinessMappingAdditionalInfo | Central hub for all merchant data |
+| WorkFlowStatus | oe-base/src/main/java/com/paytm/oe/entity/WorkFlowStatus.java | Workflow stage tracking | id, user_business_mapping_id, workflow_node_id, is_active, metadata | Many-to-One with UserBusinessMapping, WorkFlowNode | Tracks current workflow stage |
+| WorkFlowNode | oe-base/src/main/java/com/paytm/oe/entity/WorkFlowNode.java | Workflow stage definitions | id, stage, sub_stage, description | One-to-Many with WorkFlowStatus | Defines workflow stages |
+| Business | oe-base/src/main/java/com/paytm/oe/entity/Business.java | Business entity information | id, name, entity_type, category, sub_category | One-to-Many with BusinessAddressMapping | Business details |
+| RetailRelatedBusiness | oe-base/src/main/java/com/paytm/oe/entity/RetailRelatedBusiness.java | Retail business details | id, gstin, display_name, related_business_uuid | One-to-Many with RetailRelatedBusinessAddressMapping | Retail business information |
+| BankDetails | oe-base/src/main/java/com/paytm/oe/entity/BankDetails.java | Bank account information | id, bank_name, account_number, ifsc, account_holder_name | One-to-One with RelatedBusinessSolutionMapping | Bank account details |
+| UserBusinessMappingOwner | oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMappingOwner.java | Business owner information | id, name, mobile_number, email, ownership_type | Many-to-One with UserBusinessMapping | Business owner details |
+| Solution | oe-base/src/main/java/com/paytm/oe/entity/Solution.java | Solution configuration | id, solution_type, solution_additional_info | One-to-One with RelatedBusinessSolutionMapping | Solution configuration |
+
+---
+
+## Controller Classes
+
+| Class Name | Location | Purpose | Key Methods | Dependencies | API Base Path |
+|------------|----------|---------|-------------|--------------|---------------|
+| SolutionLeadController | MerchantService/src/main/java/com/paytm/merchant/controllers/panel/kam/SolutionLeadController.java | Solution lead management | createLead(), updateLead(), getLead(), validateLead() | 15+ services | /panel/v1/solution/ |
+| BulkUpdateController | MerchantService/src/main/java/com/paytm/merchant/controllers/oe/BulkUpdateController.java | Bulk operations | bulkEnterpriseModification(), bulkEnterpriseSolution(), bulkEnterpriseChild() | Bulk services | /v1/update/ |
+| DIYMcoOnlineServiceInternalImpl | MerchantService/src/main/java/com/paytm/merchant/services/mco/online/impl/DIYMcoOnlineServiceInternalImpl.java | DIY online service | fetchLeadStatus(), validateCreateRequest(), saveNameMatchVerificationStatus() | 15+ services | Internal service |
+
+---
+
+## Service Classes
+
+| Class Name | Location | Purpose | Key Methods | Dependencies | Business Logic |
+|------------|----------|---------|-------------|--------------|----------------|
+| PGServiceHelper | oe-service/src/main/java/com/paytm/oe/services/pg/impl/PGServiceHelper.java | Payment Gateway operations | createPGMerchantRequest(), populateMerchantDetails(), validateMIDCallbackRequest() | 15+ services | MID creation and management |
+| EnrichmentFlowModificationFlowServiceImpl | oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java | Enrichment flow modifications | updateDetails(), childLeadModification(), validateAndCreateRequestForBulk() | 10+ services | Product detail updates |
+| BankUpdateModificationFlowServiceImpl | oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java | Bank update modifications | updateDetails(), populateBankDetails(), isBankModificationAllowed() | 8+ services | Bank detail updates |
+| SpocModificationFlowServiceImpl | oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java | SPOC modifications | updateDetails(), validateSpocDetails(), updateSpocInformation() | 6+ services | SPOC updates |
+| OEEnterpriseHelperService | oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEEnterpriseHelperService.java | Enterprise helper service | performBasicBulkValidations(), updateModificationFlowInSai(), getWorkflowVersion() | 12+ services | Enterprise operations |
+
+---
+
+## DAO Classes
+
+| Class Name | Location | Purpose | Key Methods | Database Operations | Performance |
+|------------|----------|---------|-------------|-------------------|-------------|
+| IUserBusinessMappingDao | oe-base/src/main/java/com/paytm/oe/dao/IUserBusinessMappingDao.java | User business mapping data access | getLeadByLeadId(), save(), findByCustIdAndSolutionType() | 100+ methods | High performance |
+| UserBusinessMappingDaoImpl | oe-base/src/main/java/com/paytm/oe/dao/impl/UserBusinessMappingDaoImpl.java | Implementation of UBM DAO | getLeadByLeadId(), save(), findByCustIdAndSolutionType() | CRUD operations | Optimized queries |
+| IWorkFlowStatusDao | oe-base/src/main/java/com/paytm/oe/dao/IWorkFlowStatusDao.java | Workflow status data access | getActiveStatus(), save(), findByUserBusinessMappingId() | Workflow operations | Cached queries |
+| IWorkflowNodeDao | oe-base/src/main/java/com/paytm/oe/dao/IWorkflowNodeDao.java | Workflow node data access | findByStageAndSubStage(), findById(), findAll() | Node operations | Static data |
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Controller | Purpose | Request Body | Response | Business Logic |
+|----------|--------|------------|---------|--------------|----------|----------------|
+| /panel/v1/solution/lead | POST | SolutionLeadController | Create solution lead | SolutionLeadRequest | LeadCreationResponse | Lead creation with validation |
+| /panel/v1/solution/lead | PUT | SolutionLeadController | Update solution lead | SolutionLeadRequest | BaseResponse | Lead update with workflow |
+| /panel/v1/solution/lead | GET | SolutionLeadController | Get lead details | LeadId parameter | LeadDetailsResponse | Lead retrieval with relationships |
+| /panel/v1/solution/lead/validate | POST | SolutionLeadController | Validate lead data | SolutionLeadRequest | ValidationResponse | Data validation |
+| /v1/update/bulkEnterpriseModification | POST | BulkUpdateController | Bulk enterprise modification | SolutionLeadRequest | BaseResponse | Bulk modification with locking |
+| /v1/update/bulkEnterpriseSolution | POST | BulkUpdateController | Bulk solution update | SolutionLeadRequest | BaseResponse | Bulk solution operations |
+| /v1/update/bulkEnterpriseChild | POST | BulkUpdateController | Bulk child creation | SolutionLeadRequest | BaseResponse | Bulk child lead creation |
+| /v1/update/bulkEnterpriseMigration | POST | BulkUpdateController | Bulk migration | SfMigrationHelper | BaseResponse | Salesforce migration |
+
+---
+
+## Database Tables
+
+| Table Name | Purpose | Key Columns | Relationships | Data Volume | Indexes |
+|------------|---------|-------------|---------------|-------------|---------|
+| user_business_mapping | Core merchant data | id, lead_id, entity_type, solution_type, status, cust_id | Primary table | ~500K records | lead_id, cust_id, solution_type |
+| workflow_status | Workflow tracking | id, user_business_mapping_id, workflow_node_id, is_active | Links to UBM and nodes | ~1M records | user_business_mapping_id, is_active |
+| workflow_node | Workflow definitions | id, stage, sub_stage, description | Static reference data | ~200 records | stage, sub_stage |
+| workflow_edge | Workflow transitions | id, from_node_id, to_node_id, workflow_definition_id | Links workflow nodes | ~2K records | from_node_id, to_node_id |
+| workflow_definition | Workflow configurations | id, solution_type, entity_type, workflow_version | Workflow metadata | ~100 records | solution_type, entity_type |
+| business | Business entity data | id, name, entity_type, category, sub_category | Business details | ~500K records | entity_type, category |
+| retail_related_business | Retail business data | id, gstin, display_name, related_business_uuid | Retail business info | ~300K records | gstin, related_business_uuid |
+| bank_details | Bank account data | id, bank_name, account_number, ifsc, account_holder_name | Bank information | ~400K records | account_number, ifsc |
+| user_business_mapping_owner | Business owner data | id, user_business_mapping_id, name, mobile_number, email | Owner information | ~1M records | user_business_mapping_id, mobile_number |
+| solution | Solution configuration | id, solution_type, solution_additional_info | Solution metadata | ~500K records | solution_type |
+| solution_additional_info | Solution metadata | id, solution_id, key, value | Solution configuration | ~2M records | solution_id, key |
+| user_business_mapping_additional_info | UBM metadata | id, user_business_mapping_id, key, value | UBM configuration | ~3M records | user_business_mapping_id, key |
+| reference_data | System configuration | id, ref_type, ref_value, salesforce_field | System settings | ~10K records | ref_type, ref_value |
+| pg_solution_details | PG configuration | id, solution_key, static_configs, risk_engine_input_fields | PG settings | ~50 records | solution_key |
+| solution_question_mapping | Question mapping | id, question_id, solution_type, entity_type, weight | Risk assessment | ~5K records | solution_type, entity_type |
+
+---
+
+## Workflow Components
+
+| Component | Purpose | Key Elements | Business Logic | Integration |
+|-----------|---------|--------------|----------------|-------------|
+| Workflow Engine | Stage management | WorkFlowNode, WorkFlowStatus, WorkFlowEdge | Stage transitions based on conditions | All services |
+| Stage Definitions | Workflow stages | LEAD_CREATED, LEAD_POSTED, QC_ACTION_PENDING, PG_CALLBACK | Business stage progression | Workflow engine |
+| Sub-Stage Definitions | Detailed stages | LEAD_CREATED, TNC_ACCEPT_SUCCESS, DOCUMENT_UPLOADED | Granular stage tracking | Stage management |
+| Workflow Edges | Stage transitions | Condition-based transitions, actions, replay capability | Business rule evaluation | Workflow engine |
+| Workflow Definitions | Solution-specific workflows | enterprise_merchant_parent, diy_online_mco | Entity-specific workflows | Solution types |
+
+---
+
+## Enums and Constants
+
+| Enum/Constant | Location | Purpose | Values | Usage |
+|---------------|----------|---------|--------|-------|
+| SolutionType | oe-base/src/main/java/com/paytm/oe/enums/SolutionType.java | Solution type definitions | enterprise_merchant_business, enterprise_merchant_parent, diy_online_mco | Solution categorization |
+| EntityType | oe-base/src/main/java/com/paytm/oe/enums/EntityType.java | Business entity types | PROPRIETORSHIP, PUBLIC_LIMITED, PRIVATE_LIMITED, TRUST | Entity categorization |
+| ModificationFlow | oe-base/src/main/java/com/paytm/oe/enums/ModificationFlow.java | Modification flow types | enrichment_flow, bank_update, spoc_modification | Update flow management |
+| Stage | oe-base/src/main/java/com/paytm/oe/enums/Stage.java | Workflow stages | GG, QC, PANEL, PG_CALLBACK | Workflow management |
+| SubStage | oe-base/src/main/java/com/paytm/oe/enums/SubStage.java | Workflow sub-stages | LEAD_CREATED, LEAD_POSTED, QC_ACTION_PENDING | Detailed workflow tracking |
+| OEConstants | oe-base/src/main/java/com/paytm/oe/common/constants/OEConstants.java | System constants | TRUE, FALSE, MAQUETTE, SHOPIFY_GATEWAY | System configuration |
+| ErrorMessages | oe-base/src/main/java/com/paytm/oe/common/constants/ErrorMessages.java | Error message constants | Validation errors, business rule errors | Error handling |
+
+---
+
+## Integration Points
+
+| Integration | Purpose | Components | Data Flow | Configuration |
+|-------------|---------|------------|-----------|---------------|
+| Payment Gateway (PG) | MID creation and management | PGServiceHelper, PG Gateway Service | Lead data → PG → MID response | PG solution details |
+| KYC Services | Identity verification | KycHelperService, KYC Gateway | PAN validation, document verification | KYC configuration |
+| GST Services | GSTIN verification | IGSTService, GST API | GSTIN validation, business details | GST API configuration |
+| BOSS System | Merchant ID generation | PGGatewayService, BOSS API | Lead data → BOSS → MID | BOSS API configuration |
+| Salesforce | CRM integration | Reference data, Salesforce fields | Lead data synchronization | Salesforce field mapping |
+| Redis Cache | Performance optimization | RedisServiceImpl, StringRedisTemplate | Caching, distributed locking | Redis configuration |
+| KYB System | Business verification | KYB services, KYB API | Business verification, PAN fetching | KYB configuration |
+
+---
+
+## Business Rules
+
+| Rule Category | Rule Description | Implementation | Validation | Enforcement |
+|---------------|------------------|----------------|------------|-------------|
+| Entity Validation | Entity-specific business rules | EntityType enum, validation services | Regex validation, business logic | Service layer |
+| Workflow Rules | Stage progression rules | Workflow engine, condition evaluation | Stage validation, transition rules | Workflow engine |
+| Document Rules | Document requirements | Document service, validation rules | Document type, format validation | Document service |
+| Bank Rules | Bank account validation | Bank validation service, penny drop | Account validation, name matching | Bank service |
+| Risk Assessment | Risk evaluation rules | Risk assessment service, question weighting | Risk score calculation | Risk engine |
+| Modification Rules | Update flow restrictions | Modification flow services, stage validation | Update eligibility, data validation | Update services |
+| Bulk Operation Rules | Bulk processing rules | Bulk services, distributed locking | Concurrency control, validation | Bulk services |
+
+---
+
+## Performance Metrics
+
+| Metric | Current Value | Target | Monitoring | Optimization |
+|--------|---------------|--------|------------|--------------|
+| Lead Creation Time | ~2-3 seconds | <2 seconds | Application monitoring | Query optimization |
+| Bulk Processing Time | ~5-10 seconds per 100 leads | <5 seconds | Batch monitoring | Parallel processing |
+| Database Query Time | ~100-200ms | <100ms | Database monitoring | Index optimization |
+| API Response Time | ~500ms-1s | <500ms | API monitoring | Caching, optimization |
+| Workflow Transition Time | ~200-500ms | <200ms | Workflow monitoring | State machine optimization |
+| Cache Hit Rate | ~85% | >90% | Cache monitoring | Cache strategy |
+| Error Rate | ~2% | <1% | Error monitoring | Error handling |
+
+---
+
+## Security and Compliance
+
+| Security Aspect | Implementation | Components | Compliance | Monitoring |
+|-----------------|----------------|------------|------------|------------|
+| Data Encryption | PAN encryption, sensitive data masking | OECryptoService, data masking | PCI DSS, RBI guidelines | Encryption monitoring |
+| Access Control | Role-based access, authentication | Authentication service, authorization | Security standards | Access logging |
+| Audit Trail | Complete change tracking | Audit service, Hibernate Envers | Compliance requirements | Audit monitoring |
+| Input Validation | Comprehensive validation | Validation services, regex validation | Security standards | Validation monitoring |
+| Session Management | Secure session handling | Session service, token management | Security standards | Session monitoring |
+| Data Protection | Data masking, access logging | Data protection service, logging | Privacy regulations | Protection monitoring |
+
+---
+
+## Maintenance and Operations
+
+| Operation | Frequency | Components | Tools | Monitoring |
+|-----------|-----------|------------|-------|------------|
+| Database Maintenance | Daily | All database tables | MySQL maintenance scripts | Database monitoring |
+| Cache Refresh | Hourly | Redis cache, reference data | Cache refresh jobs | Cache monitoring |
+| Workflow Cleanup | Weekly | Workflow status, old records | Cleanup jobs | Workflow monitoring |
+| Audit Log Rotation | Daily | Audit logs, system logs | Log rotation scripts | Log monitoring |
+| Performance Monitoring | Continuous | All system components | APM tools, monitoring | Performance alerts |
+| Error Monitoring | Continuous | Error logs, exception handling | Error tracking tools | Error alerts |
+| Security Monitoring | Continuous | Security logs, access logs | Security monitoring tools | Security alerts |
+
+---
+
+## Future Enhancements
+
+| Enhancement | Priority | Impact | Effort | Timeline |
+|-------------|----------|--------|--------|----------|
+| Microservices Migration | High | High | High | 6-12 months |
+| Real-time Analytics | Medium | Medium | Medium | 3-6 months |
+| AI/ML Integration | Medium | High | High | 6-12 months |
+| Mobile App Support | Low | Medium | Medium | 3-6 months |
+| Advanced Reporting | Medium | Medium | Low | 1-3 months |
+| Performance Optimization | High | Medium | Medium | 3-6 months |
+| Enhanced Security | High | High | Medium | 3-6 months |
+| API Versioning | Medium | Low | Low | 1-3 months |
+
+---
+
+## Summary Statistics
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| Core Classes | 15+ | Main entity and service classes |
+| Controllers | 5+ | API endpoint controllers |
+| Services | 20+ | Business logic services |
+| DAOs | 10+ | Data access objects |
+| API Endpoints | 25+ | REST API endpoints |
+| Database Tables | 20+ | Core database tables |
+| Workflow Stages | 50+ | Workflow stage definitions |
+| Business Rules | 100+ | Business validation rules |
+| Integration Points | 10+ | External system integrations |
+| Enums/Constants | 15+ | System enums and constants |
+
+---
+
+## Key Insights
+
+1. **System Complexity**: The Paytm OE system is a highly complex, enterprise-grade merchant onboarding platform with sophisticated workflow management, risk assessment, and integration capabilities.
+
+2. **Scalability**: The system is designed for high scalability with bulk processing capabilities, caching strategies, and performance optimizations.
+
+3. **Compliance**: The system implements comprehensive security and compliance measures including data encryption, audit trails, and regulatory compliance.
+
+4. **Integration**: The system integrates with multiple external systems including payment gateways, KYC services, GST services, and CRM systems.
+
+5. **Maintainability**: The system follows good software engineering practices with clear separation of concerns, comprehensive documentation, and modular architecture.
+
+6. **Business Logic**: The system implements complex business rules for different entity types, workflow stages, and modification flows.
+
+7. **Performance**: The system is optimized for performance with efficient database queries, caching strategies, and bulk processing capabilities.
+
+8. **Security**: The system implements comprehensive security measures including data encryption, access control, and audit trails.
+
+---
+
+*This analysis provides a comprehensive overview of the Paytm OE system's architecture, components, and capabilities. The system is designed to handle complex merchant onboarding workflows with high performance, security, and compliance requirements.*
