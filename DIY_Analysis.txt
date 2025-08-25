@@ -1,0 +1,89 @@
+# Excel File Conversion: DIY_Analysis.xlsx
+================================================================================
+
+## WORKSHEET: Core DIY Service Classes
+------------------------------------------------------------
+
+                           Class Name                                                                                                      Location                                        Purpose                                                           Key Fields/Key Methods                                                                               Relationships                                       Usage
+                   DIYLeadServiceImpl                    MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYLeadServiceImpl.java  Core DIY lead creation and management service createLeadForSolution() fetchAllLeadData() updateLeadStatus() validateLeadData() 20+ service dependencies including IOEDao OEServiceFactoryImpl OEValidator IWorkFlowService Primary service for all DIY lead operations
+                      IDIYLeadService                            MerchantService/src/main/java/com/paytm/merchant/services/diy/IDIYLeadService.java                     DIY lead service interface createLeadForSolution() fetchAllLeadData() updateLeadStatus() validateLeadData()                                                           Implemented by DIYLeadServiceImpl    Service contract for DIY lead operations
+               DIYBusinessServiceImpl                MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYBusinessServiceImpl.java                DIY business profile management                updateBusinessDetails() validateBusinessData() updatePANDetails()                                                    Uses IOEDao OEValidator IWorkFlowService     Business profile updates and validation
+                  IDIYBusinessService                        MerchantService/src/main/java/com/paytm/merchant/services/diy/IDIYBusinessService.java                 DIY business service interface                updateBusinessDetails() validateBusinessData() updatePANDetails()                                                       Implemented by DIYBusinessServiceImpl    Service contract for business operations
+            DIYBankDetailsServiceImpl             MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYBankDetailsServiceImpl.java                    DIY bank account management                  updateBankDetails() validateBankAccount() saveBankInformation()                                             Uses IOEDao bank validation services penny drop         Bank account validation and updates
+               IDIYBankDetailsService                     MerchantService/src/main/java/com/paytm/merchant/services/diy/IDIYBankDetailsService.java             DIY bank details service interface                  updateBankDetails() validateBankAccount() saveBankInformation()                                                    Implemented by DIYBankDetailsServiceImpl        Service contract for bank operations
+      DIYAdditionalDetailsServiceImpl       MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYAdditionalDetailsServiceImpl.java DIY document and additional details management                  uploadDocuments() updateAdditionalDetails() validateDocuments()                                                  Uses IOEDao document services file storage              Document upload and processing
+               DIYDocumentServiceImpl                MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYDocumentServiceImpl.java                DIY document processing service                         processDocument() validateDocumentType() storeDocument()                                              Uses file storage services validation services             Document processing and storage
+                    DiyTnCServiceImpl                     MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DiyTnCServiceImpl.java            DIY terms and conditions management                              acceptTnC() validateTnCAcceptance() getTnCContent()                                                                    Uses IOEDao TnC services               Terms and conditions handling
+                    DiyOtpServiceImpl                     MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DiyOtpServiceImpl.java                     DIY OTP management service                                          generateOtp() validateOtp() resendOtp()                                                            Uses SMS services OTP validation               OTP generation and validation
+             DIYEDCMachineServiceImpl              MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYEDCMachineServiceImpl.java                     DIY EDC machine management                                getEDCMachines() orderEDCMachine() configureEDC()                                                     Uses inventory services device services                      EDC machine operations
+              DIYMcoOnlineServiceImpl               MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYMcoOnlineServiceImpl.java                         DIY online MCO service                              processMCORequest() validateMCOData() completeMCO()                                                       Uses MCO services validation services                  Online merchant onboarding
+DIYFseHiringLeadOperationsServiceImpl MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYFseHiringLeadOperationsServiceImpl.java                      DIY FSE hiring operations                              createFSELead() processFSEApplication() assignFSE()                                                           Uses FSE services hiring services                      Field executive hiring
+
+================================================================================
+
+## WORKSHEET: DIY Controller Classes
+------------------------------------------------------------
+
+                    Class Name                                                                                                Location                                    Purpose                                            Key Fields/Key Methods                                           Relationships                              Usage
+             DIYLeadController              MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYLeadController.java               DIY lead REST API controller            @RequestMapping("/v1/lead") createLead() getLeadData()             Uses DIYLeadServiceImpl Redis locking OAuth        Main DIY lead API endpoints
+         DIYBusinessController          MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYBusinessController.java           DIY business REST API controller      @RequestMapping("/v1/lead/business") updateBusinessDetails()                  Uses DIYBusinessServiceImpl validation     Business profile API endpoints
+      DIYBankDetailsController       MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYBankDetailsController.java       DIY bank details REST API controller @RequestMapping("/v1/lead/updateBankDetails") updateBankDetails()          Uses DIYBankDetailsServiceImpl bank validation         Bank details API endpoints
+DIYAdditionalDetailsController MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYAdditionalDetailsController.java DIY additional details REST API controller           @RequestMapping("/v1/lead/documents") uploadDocuments()        Uses DIYAdditionalDetailsServiceImpl file upload      Document upload API endpoints
+              DiyOtpController               MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DiyOtpController.java                DIY OTP REST API controller       @RequestMapping("/v1/lead/otp") generateOtp() validateOtp()                     Uses DiyOtpServiceImpl SMS services                  OTP API endpoints
+              DiyTnCController               MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DiyTnCController.java                DIY TnC REST API controller              @RequestMapping("/v1/lead/tnc") acceptTnC() getTnC()                     Uses DiyTnCServiceImpl TnC services Terms and conditions API endpoints
+        DIYMcoOnlineController         MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYMcoOnlineController.java         DIY MCO online REST API controller         @RequestMapping("/v1/merchantCommonOnboard") processMCO()               Uses DIYMcoOnlineServiceImpl MCO services                  MCO API endpoints
+       DIYEDCMachineController        MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYEDCMachineController.java        DIY EDC machine REST API controller                       @RequestMapping("/v1/edc") getEDCMachines()           Uses DIYEDCMachineServiceImpl device services          EDC machine API endpoints
+         DIYSoundBoxController          MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DIYSoundBoxController.java           DIY SoundBox REST API controller                   @RequestMapping("/v1/soundbox") orderSoundBox()                  Uses SoundBox services device services             SoundBox API endpoints
+        DiyFseHiringController         MerchantService/src/main/java/com/paytm/merchant/controllers/diy/v1/DiyFseHiringController.java         DIY FSE hiring REST API controller                        @RequestMapping("/v1/fse") createFSELead() Uses DIYFseHiringLeadOperationsServiceImpl FSE services           FSE hiring API endpoints
+
+================================================================================
+
+## WORKSHEET: DIY Data Objects and DTOs
+------------------------------------------------------------
+
+                  Class Name                                                                                       Location                          Purpose                              Key Fields/Key Methods                   Relationships                          Usage
+         DIYEDCRentalDetails                    oe-base/src/main/java/com/paytm/oe/objects/service/DIYEDCRentalDetails.java   EDC rental details data object  rentalAmount rentalDuration deviceType rentalTerms        Extends BaseRentalDetail EDC rental information storage
+               DocumentDIYVO                     MerchantService/src/main/java/com/paytm/merchant/vo/diy/DocumentDIYVO.java        DIY document value object documentType documentData documentStatus uploadDate  Used by DIYDocumentServiceImpl         Document data transfer
+               MerchantDIYDO                     MerchantService/src/main/java/com/paytm/merchant/do/diy/MerchantDIYDO.java         DIY merchant data object    merchantId businessDetails bankDetails documents      Used by DIYLeadServiceImpl          Merchant data storage
+DiyOnlineLeadCreationRequest MerchantService/src/main/java/com/paytm/merchant/request/diy/DiyOnlineLeadCreationRequest.java DIY online lead creation request       solutionType entityType businessData bankData       Used by DIYLeadController     Lead creation request data
+          EdcDiyOrderRequest           MerchantService/src/main/java/com/paytm/merchant/request/diy/EdcDiyOrderRequest.java            EDC DIY order request     deviceType quantity deliveryAddress paymentMode Used by DIYEDCMachineController         EDC order request data
+       LeadCreationRequestVO             MerchantService/src/main/java/com/paytm/merchant/vo/diy/LeadCreationRequestVO.java       Lead creation value object            leadData businessInfo bankInfo documents      Used by DIYLeadServiceImpl    Lead creation data transfer
+
+================================================================================
+
+## WORKSHEET: DIY Solution Types
+------------------------------------------------------------
+
+            Solution Type                 Description            Business Domain                 Key Features Implementation Status
+                  diy_mco DIY Merchant Common Onboard        Merchant Onboarding Complete onboarding workflow      Production Ready
+           diy_online_mco              Online DIY MCO Online Merchant Onboarding         Web-based onboarding      Production Ready
+            diy_sound_box                DIY SoundBox          Device Management         Audio payment device      Production Ready
+          diy_soundbox_v2             DIY SoundBox V2 Enhanced Device Management        Advanced audio device      Production Ready
+              diy_map_edc             DIY EDC Mapping            Payment Devices          Card swipe machines      Production Ready
+diy_upgrade_merchant_plan      Merchant Plan Upgrades            Plan Management             Plan enhancement      Production Ready
+            diy_brand_emi               DIY Brand EMI                    Lending                 EMI services      Production Ready
+       diy_corporate_edit   Corporate Profile Updates         Profile Management            Corporate updates      Production Ready
+diy_business_pan_addition       Business PAN Addition             KYC/Compliance               PAN management      Production Ready
+           diy_fse_hiring                  FSE Hiring           Field Operations       Field executive hiring      Production Ready
+    diy_device_onboarding           Device Onboarding          Device Management            Device activation      Production Ready
+                  psa_diy                     PSA DIY           Partner Services           Partner onboarding      Production Ready
+
+================================================================================
+
+## WORKSHEET: DIY API Endpoints
+------------------------------------------------------------
+
+                  Endpoint Method                     Controller                 Purpose          Request Body             Response                    Business Logic
+                  /v1/lead   POST              DIYLeadController     Create new DIY lead LeadCreationRequestVO LeadCreationResponse     Lead creation with validation
+                  /v1/lead    GET              DIYLeadController     Fetch DIY lead data      LeadId parameter  LeadDetailsResponse Lead retrieval with relationships
+         /v1/lead/business   POST          DIYBusinessController Update business details BusinessUpdateRequest         BaseResponse          Business profile updates
+/v1/lead/updateBankDetails   POST       DIYBankDetailsController     Update bank details    BankDetailsRequest         BaseResponse           Bank account validation
+        /v1/lead/documents   POST DIYAdditionalDetailsController        Upload documents DocumentUploadRequest         BaseResponse               Document processing
+              /v1/lead/otp   POST               DiyOtpController          OTP operations            OTPRequest          OTPResponse     OTP generation and validation
+              /v1/lead/tnc   POST               DiyTnCController      Terms & Conditions            TnCRequest         BaseResponse                    TnC acceptance
+ /v1/merchantCommonOnboard   POST         DIYMcoOnlineController          MCO operations            MCORequest          MCOResponse               Merchant onboarding
+                   /v1/edc    GET        DIYEDCMachineController   EDC device operations         DeviceRequest       DeviceResponse             EDC device management
+              /v1/soundbox   POST          DIYSoundBoxController     SoundBox operations       SoundBoxRequest     SoundBoxResponse        SoundBox device management
+
+================================================================================
+

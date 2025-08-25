@@ -1,0 +1,519 @@
+# Excel File Conversion: Paytm_OE_System_Comprehensive_Analysis.xlsx
+================================================================================
+
+## WORKSHEET: Core Entity Classes
+------------------------------------------------------------
+
+                       Class Name                                                                         Location                             Purpose                                                              Key Fields                                                                                Relationships                             Usage
+              UserBusinessMapping               oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMapping.java Core entity for merchant onboarding id, lead_id, entity_type, solution_type, status, cust_id, mobile_number One-to-Many with WorkFlowStatus, UserBusinessMappingOwner, UserBusinessMappingAdditionalInfo Central hub for all merchant data
+                   WorkFlowStatus                    oe-base/src/main/java/com/paytm/oe/entity/WorkFlowStatus.java             Workflow stage tracking     id, user_business_mapping_id, workflow_node_id, is_active, metadata                                           Many-to-One with UserBusinessMapping, WorkFlowNode     Tracks current workflow stage
+                     WorkFlowNode                      oe-base/src/main/java/com/paytm/oe/entity/WorkFlowNode.java          Workflow stage definitions                                       id, stage, sub_stage, description                                                              One-to-Many with WorkFlowStatus           Defines workflow stages
+                     WorkFlowEdge                      oe-base/src/main/java/com/paytm/oe/entity/WorkFlowEdge.java                Workflow transitions                    id, from_node_id, to_node_id, workflow_definition_id                                                                         Links workflow nodes         Defines stage transitions
+               WorkFlowDefinition                oe-base/src/main/java/com/paytm/oe/entity/WorkFlowDefinition.java             Workflow configurations                        id, solution_type, entity_type, workflow_version                                                                            Workflow metadata       Solution-specific workflows
+                         Business                          oe-base/src/main/java/com/paytm/oe/entity/Business.java         Business entity information                           id, name, entity_type, category, sub_category                                                      One-to-Many with BusinessAddressMapping                  Business details
+            RetailRelatedBusiness             oe-base/src/main/java/com/paytm/oe/entity/RetailRelatedBusiness.java             Retail business details                          id, gstin, display_name, related_business_uuid                                         One-to-Many with RetailRelatedBusinessAddressMapping       Retail business information
+                      BankDetails                       oe-base/src/main/java/com/paytm/oe/entity/BankDetails.java            Bank account information                id, bank_name, account_number, ifsc, account_holder_name                                               One-to-One with RelatedBusinessSolutionMapping              Bank account details
+         UserBusinessMappingOwner          oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMappingOwner.java          Business owner information                          id, name, mobile_number, email, ownership_type                                                         Many-to-One with UserBusinessMapping            Business owner details
+                         Solution                          oe-base/src/main/java/com/paytm/oe/entity/Solution.java              Solution configuration                             id, solution_type, solution_additional_info                                               One-to-One with RelatedBusinessSolutionMapping            Solution configuration
+   RelatedBusinessSolutionMapping    oe-base/src/main/java/com/paytm/oe/entity/RelatedBusinessSolutionMapping.java           Business-solution mapping                           id, business_id, solution_id, bank_details_id                                                        Links Business, Solution, BankDetails          Core relationship entity
+UserBusinessMappingAdditionalInfo oe-base/src/main/java/com/paytm/oe/entity/UserBusinessMappingAdditionalInfo.java                        UBM metadata                                id, user_business_mapping_id, key, value                                                         Many-to-One with UserBusinessMapping                 UBM configuration
+           SolutionAdditionalInfo            oe-base/src/main/java/com/paytm/oe/entity/SolutionAdditionalInfo.java                   Solution metadata                                             id, solution_id, key, value                                                                    Many-to-One with Solution            Solution configuration
+                   UserKycDetails                    oe-base/src/main/java/com/paytm/oe/entity/UserKycDetails.java                     KYC information                         id, user_business_mapping_id, pan, aadhar, name                                                         Many-to-One with UserBusinessMapping                  KYC data storage
+           BusinessAddressMapping            oe-base/src/main/java/com/paytm/oe/entity/BusinessAddressMapping.java                  Business addresses                         id, business_id, address_type, address_sub_type                                                                    Many-to-One with Business                Address management
+
+================================================================================
+
+## WORKSHEET: Service Classes
+------------------------------------------------------------
+
+                               Class Name                                                                                                       Location                       Purpose                                                                        Key Methods Dependencies               Business Logic
+                          PGServiceHelper                                    oe-service/src/main/java/com/paytm/oe/services/pg/impl/PGServiceHelper.java    Payment Gateway operations createPGMerchantRequest(), populateMerchantDetails(), validateMIDCallbackRequest() 15+ services  MID creation and management
+EnrichmentFlowModificationFlowServiceImpl        oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java Enrichment flow modifications        updateDetails(), childLeadModification(), validateAndCreateRequestForBulk() 10+ services       Product detail updates
+    BankUpdateModificationFlowServiceImpl            oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java     Bank update modifications                updateDetails(), populateBankDetails(), isBankModificationAllowed()  8+ services          Bank detail updates
+          SpocModificationFlowServiceImpl                  oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java            SPOC modifications                    updateDetails(), validateSpocDetails(), updateSpocInformation()  6+ services                 SPOC updates
+                OEEnterpriseHelperService                        oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEEnterpriseHelperService.java     Enterprise helper service performBasicBulkValidations(), updateModificationFlowInSai(), getWorkflowVersion() 12+ services        Enterprise operations
+         OEApplicationServiceInternalImpl                      oe-service/src/main/java/com/paytm/oe/services/impl/OEApplicationServiceInternalImpl.java  Application service internal                                     loadData(), updateDetails(), validateRequest() 20+ services       Core application logic
+             OEAbstractApplicationService                     oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEAbstractApplicationService.java  Abstract application service                                               Abstract methods for lead processing 15+ services   Base service functionality
+          DIYMcoOnlineServiceInternalImpl MerchantService/src/main/java/com/paytm/merchant/services/mco/online/impl/DIYMcoOnlineServiceInternalImpl.java            DIY online service      fetchLeadStatus(), validateCreateRequest(), saveNameMatchVerificationStatus() 15+ services        DIY online operations
+                       DIYLeadServiceImpl                     MerchantService/src/main/java/com/paytm/merchant/services/diy/impl/DIYLeadServiceImpl.java              DIY lead service                                         createLead(), updateLead(), validateLead() 20+ services          DIY lead management
+                        KycIVRBaseService                      MerchantService/src/main/java/com/paytm/merchant/services/kyc/impl/KycIVRBaseService.java               KYC IVR service                               processIVRForKYC(), validateKYC(), updateKYCStatus() 10+ services           KYC IVR operations
+      AssistedMerchantInternalServiceImpl    oe-service/src/main/java/com/paytm/merchant/services/merchant/impl/AssistedMerchantInternalServiceImpl.java     Assisted merchant service                 createAssistedLead(), updateAssistedLead(), validateAssistedLead() 15+ services Assisted merchant operations
+                 KYCSyncHelperServiceImpl                           oe-service/src/main/java/com/paytm/oe/services/kycSync/KYCSyncHelperServiceImpl.java               KYC sync helper                              syncKYCData(), processKYCUpdates(), validateKYCData()  8+ services          KYC synchronization
+          LeadWorkflowActionHelperService                         oe-service/src/main/java/com/paytm/oe/services/wf/LeadWorkflowActionHelperService.java        Workflow action helper         executeWorkflowAction(), validateWorkflowAction(), processWorkflowAction() 10+ services   Workflow action management
+                     OEServiceFactoryImpl                                  oe-service/src/main/java/com/paytm/oe/services/impl/OEServiceFactoryImpl.java               Service factory                                   getService(), createService(), validateService() 50+ services      Service factory pattern
+                SolutionLeadHelperService                           oe-service/src/main/java/com/paytm/oe/services/helper/SolutionLeadHelperService.java          Solution lead helper                validateSolutionLead(), processSolutionLead(), updateSolutionLead() 12+ services     Solution lead operations
+
+================================================================================
+
+## WORKSHEET: DAO Classes
+------------------------------------------------------------
+
+                     Class Name                                                                    Location                           Purpose                                                                              Key Methods Database Operations           Performance
+        IUserBusinessMappingDao         oe-base/src/main/java/com/paytm/oe/dao/IUserBusinessMappingDao.java User business mapping data access                                 getLeadByLeadId(), save(), findByCustIdAndSolutionType()        100+ methods      High performance
+     UserBusinessMappingDaoImpl oe-base/src/main/java/com/paytm/oe/dao/impl/UserBusinessMappingDaoImpl.java         Implementation of UBM DAO                                 getLeadByLeadId(), save(), findByCustIdAndSolutionType()     CRUD operations     Optimized queries
+             IWorkFlowStatusDao              oe-base/src/main/java/com/paytm/oe/dao/IWorkFlowStatusDao.java       Workflow status data access                                 getActiveStatus(), save(), findByUserBusinessMappingId() Workflow operations        Cached queries
+               IWorkflowNodeDao                oe-base/src/main/java/com/paytm/oe/dao/IWorkflowNodeDao.java         Workflow node data access                                          findByStageAndSubStage(), findById(), findAll()     Node operations           Static data
+                         IOEDao                          oe-base/src/main/java/com/paytm/oe/dao/IOEDao.java                    OE data access getUserBusinessMappingByCustId(), saveUserBusinessMapping(), updateUserBusinessMapping()         50+ methods  Core data operations
+                   IBusinessDao                    oe-base/src/main/java/com/paytm/oe/dao/IBusinessDao.java              Business data access                                     saveBusiness(), findBusinessById(), updateBusiness()       Business CRUD   Business operations
+                   ISolutionDao                    oe-base/src/main/java/com/paytm/oe/dao/ISolutionDao.java              Solution data access                                   saveSolution(), findSolutionByType(), updateSolution()       Solution CRUD   Solution operations
+                   IUserInfoDao                    oe-base/src/main/java/com/paytm/oe/dao/IUserInfoDao.java             User info data access                                     saveUserInfo(), findUserInfoById(), updateUserInfo()           User CRUD       User operations
+             IUserKycDetailsDao              oe-base/src/main/java/com/paytm/oe/dao/IUserKycDetailsDao.java           KYC details data access                               saveKycDetails(), findKycDetailsById(), updateKycDetails()            KYC CRUD        KYC operations
+              IReferenceDataDao               oe-base/src/main/java/com/paytm/oe/dao/IReferenceDataDao.java             Reference data access                           getReferenceData(), saveReferenceData(), updateReferenceData()      Reference CRUD  Reference operations
+                        IJobDao                         oe-base/src/main/java/com/paytm/oe/dao/IJobDao.java                   Job data access                                                    saveJob(), findJobById(), updateJob()            Job CRUD        Job operations
+             ILeadAllocationDao              oe-base/src/main/java/com/paytm/oe/dao/ILeadAllocationDao.java       Lead allocation data access                   saveLeadAllocation(), findLeadAllocationById(), updateLeadAllocation()     Allocation CRUD Allocation operations
+IPennyDropTransactionDetailsDao oe-base/src/main/java/com/paytm/oe/dao/IPennyDropTransactionDetailsDao.java            Penny drop data access                                  savePennyDrop(), findPennyDropById(), updatePennyDrop()     Penny drop CRUD Penny drop operations
+         IWorkFlowDefinitionDao          oe-base/src/main/java/com/paytm/oe/dao/IWorkFlowDefinitionDao.java   Workflow definition data access       saveWorkflowDefinition(), findWorkflowDefinitionById(), updateWorkflowDefinition()     Definition CRUD Definition operations
+               IWorkFlowEdgeDao                oe-base/src/main/java/com/paytm/oe/dao/IWorkFlowEdgeDao.java         Workflow edge data access                         saveWorkflowEdge(), findWorkflowEdgeById(), updateWorkflowEdge()           Edge CRUD       Edge operations
+
+================================================================================
+
+## WORKSHEET: Controller Classes
+------------------------------------------------------------
+
+            Class Name                                                                                           Location                  Purpose                                                                   Key Methods  Dependencies       API Base Path
+SolutionLeadController MerchantService/src/main/java/com/paytm/merchant/controllers/panel/kam/SolutionLeadController.java Solution lead management                         createLead(), updateLead(), getLead(), validateLead()  15+ services /panel/v1/solution/
+  BulkUpdateController          MerchantService/src/main/java/com/paytm/merchant/controllers/oe/BulkUpdateController.java          Bulk operations bulkEnterpriseModification(), bulkEnterpriseSolution(), bulkEnterpriseChild() Bulk services         /v1/update/
+    MerchantController         MerchantService/src/main/java/com/paytm/merchant/controllers/gg/v3/MerchantController.java      Merchant operations                           getMerchant(), updateMerchant(), validateMerchant()  20+ services       /v3/merchant/
+        TestController             MerchantService/src/main/java/com/paytm/merchant/controllers/gg/v1/TestController.java          Test operations                                      testAPI(), validateTest(), processTest()  15+ services           /v1/test/
+         DevController          MerchantService/src/main/java/com/paytm/merchant/controllers/common/v1/DevController.java   Development operations                                         devAPI(), validateDev(), processDev()  20+ services            /v1/dev/
+         DIYController                MerchantService/src/main/java/com/paytm/merchant/controllers/diy/DIYController.java           DIY operations                           createDIYLead(), updateDIYLead(), validateDIYLead()  15+ services               /diy/
+         KYCController                MerchantService/src/main/java/com/paytm/merchant/controllers/kyc/KYCController.java           KYC operations                                      validateKYC(), updateKYC(), processKYC()  10+ services               /kyc/
+    WorkflowController      MerchantService/src/main/java/com/paytm/merchant/controllers/workflow/WorkflowController.java      Workflow operations                       updateWorkflow(), validateWorkflow(), processWorkflow()  12+ services          /workflow/
+    DocumentController      MerchantService/src/main/java/com/paytm/merchant/controllers/document/DocumentController.java      Document operations                       uploadDocument(), validateDocument(), processDocument()   8+ services          /document/
+        BankController              MerchantService/src/main/java/com/paytm/merchant/controllers/bank/BankController.java          Bank operations                                   validateBank(), updateBank(), processBank()  10+ services              /bank/
+
+================================================================================
+
+## WORKSHEET: Integration Services
+------------------------------------------------------------
+
+             Service Name                                                                                 Location                     Purpose                                               Key Methods External System Integration Type
+        IPGGatewayService                 oe-service/src/main/java/com/paytm/oe/services/pg/IPGGatewayService.java Payment Gateway integration                   createMID(), updateMID(), validateMID() Payment Gateway         REST API
+              IKYBService                      oe-service/src/main/java/com/paytm/oe/services/kyb/IKYBService.java             KYB integration                  validateKYB(), updateKYB(), processKYB()      KYB System         REST API
+              IGSTService                      oe-service/src/main/java/com/paytm/oe/services/gst/IGSTService.java             GST integration                  validateGST(), updateGST(), processGST()      GST System         REST API
+     IOAuthGatewayService           oe-service/src/main/java/com/paytm/oe/services/oauth/IOAuthGatewayService.java           OAuth integration            validateOAuth(), updateOAuth(), processOAuth()    OAuth System         REST API
+       ISMSGatewayService               oe-service/src/main/java/com/paytm/oe/services/sms/ISMSGatewayService.java             SMS integration                    sendSMS(), validateSMS(), processSMS()     SMS Gateway         REST API
+     IEmailGatewayService           oe-service/src/main/java/com/paytm/oe/services/email/IEmailGatewayService.java           Email integration              sendEmail(), validateEmail(), processEmail()   Email Gateway         REST API
+ISalesforceGatewayService oe-service/src/main/java/com/paytm/oe/services/salesforce/ISalesforceGatewayService.java      Salesforce integration syncSalesforce(), updateSalesforce(), processSalesforce()      Salesforce         REST API
+      IBossGatewayService             oe-service/src/main/java/com/paytm/oe/services/boss/IBossGatewayService.java            BOSS integration    createBossLead(), updateBossLead(), validateBossLead()     BOSS System         REST API
+     IKafkaGatewayService           oe-service/src/main/java/com/paytm/oe/services/kafka/IKafkaGatewayService.java           Kafka integration      publishMessage(), consumeMessage(), processMessage()           Kafka    Message Queue
+     IRedisGatewayService           oe-service/src/main/java/com/paytm/oe/services/redis/IRedisGatewayService.java           Redis integration                     setCache(), getCache(), deleteCache()           Redis            Cache
+
+================================================================================
+
+## WORKSHEET: Utility Classes
+------------------------------------------------------------
+
+           Class Name                                                                               Location               Purpose                                                       Key Methods          Dependencies                    Usage
+          CommonUtils                       oe-base/src/main/java/com/paytm/oe/common/utils/CommonUtils.java      Common utilities                      validateInput(), formatData(), processData()       No dependencies        Utility functions
+          OEValidator                       oe-base/src/main/java/com/paytm/oe/common/utils/OEValidator.java  Validation utilities          validateEntity(), validateSolution(), validateWorkflow()   Validation services          Data validation
+   OEConverterService       oe-service/src/main/java/com/paytm/oe/services/converter/OEConverterService.java       Data conversion             convertEntity(), convertSolution(), convertWorkflow()    Converter services      Data transformation
+      OECryptoService             oe-service/src/main/java/com/paytm/oe/services/crypto/OECryptoService.java    Encryption service                          encryptData(), decryptData(), hashData()       Crypto services          Data encryption
+      OELoggerService             oe-service/src/main/java/com/paytm/oe/services/logger/OELoggerService.java       Logging service                                 logInfo(), logError(), logDebug()       Logger services      Application logging
+       OECacheService               oe-service/src/main/java/com/paytm/oe/services/cache/OECacheService.java       Caching service                             setCache(), getCache(), deleteCache()        Cache services             Data caching
+OENotificationService oe-service/src/main/java/com/paytm/oe/services/notification/OENotificationService.java  Notification service sendNotification(), validateNotification(), processNotification() Notification services       User notifications
+       OEAuditService               oe-service/src/main/java/com/paytm/oe/services/audit/OEAuditService.java         Audit service                       logAudit(), validateAudit(), processAudit()        Audit services             Audit trails
+    OESecurityService         oe-service/src/main/java/com/paytm/oe/services/security/OESecurityService.java      Security service              validateSecurity(), processSecurity(), logSecurity()     Security services      Security operations
+      OEConfigService             oe-service/src/main/java/com/paytm/oe/services/config/OEConfigService.java Configuration service                        getConfig(), setConfig(), validateConfig()       Config services Configuration management
+
+================================================================================
+
+## WORKSHEET: Job Services
+------------------------------------------------------------
+
+                        Class Name                                                                                      Location                   Purpose                                                               Key Methods           Dependencies   Schedule
+      PGDeviceFeatureUpdateJobImpl            oe-batch/src/main/java/com/paytm/oe/services/job/PGDeviceFeatureUpdateJobImpl.java PG device feature updates   updateDeviceFeatures(), processDeviceUpdates(), validateDeviceUpdates()            PG services      Daily
+      RecurringJobSchedulerService            oe-batch/src/main/java/com/paytm/oe/services/job/RecurringJobSchedulerService.java            Job scheduling                                scheduleJob(), processJob(), validateJob()     Scheduler services Continuous
+        ChildTriggerJobServiceImpl              oe-batch/src/main/java/com/paytm/oe/services/job/ChildTriggerJobServiceImpl.java        Child job triggers                  triggerChildJob(), processChildJob(), validateChildJob()       Trigger services  On-demand
+  SubWorkFlowTriggerJobServiceImpl   oe-batch/src/main/java/com/paytm/oe/services/job/impl/SubWorkFlowTriggerJobServiceImpl.java     Sub-workflow triggers         triggerSubWorkflow(), processSubWorkflow(), validateSubWorkflow()      Workflow services  On-demand
+           BillingDetailsUpdateJob            oe-batch/src/main/java/com/paytm/oe/services/job/impl/BillingDetailsUpdateJob.java           Billing updates updateBillingDetails(), processBillingUpdates(), validateBillingUpdates()       Billing services      Daily
+         AsyncFileProcessorService          oe-batch/src/main/java/com/paytm/oe/services/job/impl/AsyncFileProcessorService.java           File processing                               processFile(), validateFile(), updateFile()          File services  On-demand
+KycVerificationServiceInternalImpl oe-batch/src/main/java/com/paytm/oe/services/job/impl/KycVerificationServiceInternalImpl.java          KYC verification                                  verifyKYC(), processKYC(), validateKYC()           KYC services Continuous
+         SaveInvoiceDetailsJobImpl          oe-batch/src/main/java/com/paytm/oe/services/job/impl/SaveInvoiceDetailsJobImpl.java        Invoice processing                        saveInvoice(), processInvoice(), validateInvoice()       Invoice services      Daily
+              AffordabilitySyncJob               oe-batch/src/main/java/com/paytm/oe/services/job/impl/AffordabilitySyncJob.java        Affordability sync      syncAffordability(), processAffordability(), validateAffordability() Affordability services      Daily
+                  MGVOnboardingJob                   oe-batch/src/main/java/com/paytm/oe/services/job/impl/MGVOnboardingJob.java            MGV onboarding                                 onboardMGV(), processMGV(), validateMGV()           MGV services  On-demand
+
+================================================================================
+
+## WORKSHEET: Workflow Action Services
+------------------------------------------------------------
+
+                               Class Name                                                                                                      Location                 Purpose                                                       Key Methods      Dependencies            Trigger
+               SaveBRE1OfferDetailsAction                oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/SaveBRE1OfferDetailsAction.java      BRE1 offer details saveOfferDetails(), processOfferDetails(), validateOfferDetails()    Offer services     Workflow stage
+               GenericPanValidationAction                oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/GenericPanValidationAction.java          PAN validation                          validatePAN(), processPAN(), updatePAN()      PAN services     Workflow stage
+              BankRequestValidationAction               oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/BankRequestValidationAction.java         Bank validation                       validateBank(), processBank(), updateBank()     Bank services     Workflow stage
+LendingKYCSuccessCallbackValidationAction oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/LendingKYCSuccessCallbackValidationAction.java KYC callback validation  validateKYCCallback(), processKYCCallback(), updateKYCCallback()      KYC services     Workflow stage
+                  SkipStageMovementAction                   oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/SkipStageMovementAction.java          Stage skipping                        skipStage(), processSkip(), validateSkip() Workflow services Workflow condition
+                            SaveTncAction                             oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/SaveTncAction.java              TNC saving                            saveTNC(), processTNC(), validateTNC()      TNC services     Workflow stage
+                      PanValidationAction                       oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/PanValidationAction.java          PAN validation                          validatePAN(), processPAN(), updatePAN()      PAN services     Workflow stage
+                 LendingSelfieMatchAction                  oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/LendingSelfieMatchAction.java         Selfie matching                  matchSelfie(), processSelfie(), validateSelfie()   Selfie services     Workflow stage
+                 SaveCurrentAddressAction                  oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/SaveCurrentAddressAction.java          Address saving                saveAddress(), processAddress(), validateAddress()  Address services     Workflow stage
+                   LendingNameMatchAction                    oe-service/src/main/java/com/paytm/oe/services/wf/impl/actions/LendingNameMatchAction.java           Name matching                        matchName(), processName(), validateName()     Name services     Workflow stage
+
+================================================================================
+
+## WORKSHEET: Business Lead Modification Flows
+------------------------------------------------------------
+
+                                            Class Name                                          Purpose                                                                                                             Location                                                    Key Annotations                                                                                    Key Methods                                                                                                                     Dependencies                                                                                Business Logic
+    RegisteredAddressUpdateModificationFlowServiceImpl      Registered address update modification flow     oe-service/src/main/java/com/paytm/oe/services/lead/impl/RegisteredAddressUpdateModificationFlowServiceImpl.java     @Service(ModificationFlow.Constants.REGISTERED_ADDRESS_UPDATE)                        fetchDetails, updateDetails, validateAddress, updateModificationDetails              OECommonInternalServiceHelper, OEEnterpriseHelperService, KYBServiceImpl, IUserBusinessMappingDao, IWorkFlowService                Address validation, KYB integration, workflow progression, document management
+                DisplayNameModificationFlowServiceImpl                   Display name modification flow                 oe-service/src/main/java/com/paytm/oe/services/lead/impl/DisplayNameModificationFlowServiceImpl.java     @Service(ModificationFlow.Constants.DISPLAY_NAME_MODIFICATION)                                               fetchDetails, updateDetails, validateDisplayName                              IRegexValidationService, OEValidator, IAuditTrailService, IUserBusinessMappingDao, IWorkFlowService                                Name validation, business logic, audit trail, regex validation
+                 DealerCodeModificationFlowServiceImpl                    Dealer code modification flow                  oe-service/src/main/java/com/paytm/oe/services/lead/impl/DealerCodeModificationFlowServiceImpl.java      @Service(ModificationFlow.Constants.DEALER_CODE_MODIFICATION)                                                fetchDetails, updateDetails, validateDealerCode                                                     OEServiceFactoryImpl, OEValidator, IUserBusinessMappingDao, IWorkFlowService                                  Dealer code validation, business rules, workflow integration
+        CategorySubcategoryModificationFlowServiceImpl       Category and subcategory modification flow         oe-service/src/main/java/com/paytm/oe/services/lead/impl/CategorySubcategoryModificationFlowServiceImpl.java       @Service(ModificationFlow.Constants.CAT_SUBCAT_MODIFICATION) fetchDetails, updateDetails, childLeadModification, delinkCompanyActivityCertificateIfRequired CatSubCatHelperService, AssistedMerchantInternalServiceImpl, IDocumentServiceInternal, IUserBusinessMappingDao, IWorkFlowService Category validation, business classification, child lead synchronization, document management
+                       SpocModificationFlowServiceImpl SPOC (Single Point of Contact) modification flow                        oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java             @Service(ModificationFlow.Constants.SPOC_MODIFICATION)                                               fetchDetails, updateDetails, validateSpocDetails              OEEnterpriseCreateLeadHelperService, IDocumentServiceInternal, IAgentDao, IUserBusinessMappingDao, IWorkFlowService            SPOC validation, contact management, authorization validation, document management
+         GstinAddressUpdateModificationFlowServiceImpl           GSTIN address update modification flow          oe-service/src/main/java/com/paytm/oe/services/lead/impl/GstinAddressUpdateModificationFlowServiceImpl.java          @Service(ModificationFlow.Constants.GSTIN_ADDRESS_UPDATE)                                              fetchDetails, updateDetails, validateGstinAddress                                   IGSTService, IMarketPlaceService, IPGGatewayService, IUserBusinessMappingDao, IWorkFlowService         GSTIN validation, address verification, external GST integration, document management
+CorrespondanceAddressUpdateModificationFlowServiceImpl  Correspondence address update modification flow oe-service/src/main/java/com/paytm/oe/services/lead/impl/CorrespondanceAddressUpdateModificationFlowServiceImpl.java @Service(ModificationFlow.Constants.CORRESPONDENCE_ADDRESS_UPDATE)                                                   fetchDetails, updateDetails, validateAddress            IPGGatewayService, IDocumentServiceInternal, IOEApplicationServiceInternal, IUserBusinessMappingDao, IWorkFlowService       Address validation, correspondence management, consent management, workflow integration
+        ModelSubModelUpdateModificationFlowServiceImpl     Model and sub-model update modification flow         oe-service/src/main/java/com/paytm/oe/services/lead/impl/ModelSubModelUpdateModificationFlowServiceImpl.java        @Service(ModificationFlow.Constants.MODEL_SUB_MODEL_UPDATE)                                             fetchDetails, updateDetails, validateModelSubModel                                           OEEnterpriseValidator, OEServiceFactoryImpl, IUserBusinessMappingDao, IWorkFlowService                               Model validation, business classification, workflow integration
+
+================================================================================
+
+## WORKSHEET: Solution Lead Modification Flows
+------------------------------------------------------------
+
+                                     Class Name                                                        Purpose                                                                                                      Location                                                         Key Annotations                                                                                                               Key Methods                                                                                                         Dependencies                                                                                    Business Logic
+      EnrichmentFlowModificationFlowServiceImpl Comprehensive data enrichment and product detail modifications       oe-service/src/main/java/com/paytm/oe/services/lead/impl/EnrichmentFlowModificationFlowServiceImpl.java                    @Service(ModificationFlow.Constants.ENRICHMENT_FLOW) fetchDetails, updateDetails, childLeadModification, validateAndCreateRequestForBulk, updatingSAIFlagsBasedOnRequestAndUBM IMdrBenchmarkValidationService, IBankLobService, IDocumentServiceInternal, IUserBusinessMappingDao, IWorkFlowService Product detail updates, MDR/CFT/ICT validation, bulk processing, workflow management, audit trail
+    InvoiceSapUpdateModificationFlowServiceImpl                         Invoice SAP type configuration updates     oe-service/src/main/java/com/paytm/oe/services/lead/impl/InvoiceSapUpdateModificationFlowServiceImpl.java            @Service(ModificationFlow.Constants.INVOICE_SAP_TYPE_UPDATE)                                                   fetchDetails, updateDetails, childLeadModification, populateBossDetails                              IPGGatewayService, OEEnterpriseHelperService, IUserBusinessMappingDao, IWorkFlowService            SAP type validation, workflow management, child lead synchronization, BOSS integration
+SettlementTypeUpdateModificationFlowServiceImpl                          Settlement type configuration updates oe-service/src/main/java/com/paytm/oe/services/lead/impl/SettlementTypeUpdateModificationFlowServiceImpl.java             @Service(ModificationFlow.Constants.SETTLEMENT_TYPE_UPDATE)                                                                        fetchDetails, updateDetails, childLeadModification                                                 OEEnterpriseHelperService, IWorkFlowService, IUserBusinessMappingDao          Settlement type validation, workflow management, child lead synchronization, audit trail
+              RentalPlanModificationServiceImpl                        Rental plan modifications and additions               oe-service/src/main/java/com/paytm/oe/services/lead/impl/RentalPlanModificationServiceImpl.java                    @Service(ModificationFlow.Constants.ADD_RENTAL_PLAN)                                                fetchDetails, updateDetails, childLeadModification, appendInRentalPlanList                                                 OEEnterpriseHelperService, IWorkFlowService, IUserBusinessMappingDao                Rental plan management, plan validation, workflow management, partial save support
+          BankUpdateModificationFlowServiceImpl  Bank account information and settlement configuration updates           oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java                        @Service(ModificationFlow.Constants.BANK_UPDATE)                        fetchDetails, updateDetails, childLeadModification, isBankModificationAllowed, populateBankDetails                 IPGGatewayService, OEValidator, OEEnterpriseHelperService, IUserBusinessMappingDao, IWorkFlowService        Bank detail validation, settlement type validation, penny drop validation, bulk processing
+               CftUpdateModificationServiceImpl              Cash Flow Transaction (CFT) configuration updates                oe-service/src/main/java/com/paytm/oe/services/lead/impl/CftUpdateModificationServiceImpl.java                         @Service(ModificationFlow.Constants.CFT_UPDATE)                                                                        fetchDetails, updateDetails, childLeadModification                              IPGGatewayService, OEEnterpriseHelperService, IUserBusinessMappingDao, IWorkFlowService           CFT validation, agreement waiver logic, workflow management, child lead synchronization
+           IctUpdateModificationFlowServiceImpl          Inter-Company Transaction (ICT) configuration updates            oe-service/src/main/java/com/paytm/oe/services/lead/impl/IctUpdateModificationFlowServiceImpl.java                         @Service(ModificationFlow.Constants.ICT_UPDATE)                                                                        fetchDetails, updateDetails, childLeadModification                              IPGGatewayService, OEEnterpriseHelperService, IUserBusinessMappingDao, IWorkFlowService                      ICT validation, workflow management, child lead synchronization, audit trail
+         ECodeUpdateModificationFlowServiceImpl                                   E-Code configuration updates          oe-service/src/main/java/com/paytm/oe/services/lead/impl/ECodeUpdateModificationFlowServiceImpl.java                 @Service(ModificationFlow.Constants.ECODE_MODIFICATION)                                                                                fetchDetails, updateDetails, validateECode                                                 OEEnterpriseHelperService, IWorkFlowService, IUserBusinessMappingDao                                   E-Code validation, workflow management, business classification
+       AccountSourceModificationFlowServiceImpl                      Account source team configuration updates        oe-service/src/main/java/com/paytm/oe/services/lead/impl/AccountSourceModificationFlowServiceImpl.java @Service(ModificationFlow.Constants.ACCOUNT_SOURCE_CHANGE_MODIFICATION)                                                                        fetchDetails, updateDetails, childLeadModification                                                 OEEnterpriseHelperService, IWorkFlowService, IUserBusinessMappingDao       Account source validation, team management, workflow management, child lead synchronization
+
+================================================================================
+
+## WORKSHEET: Child Lead Modification Flows
+------------------------------------------------------------
+
+                                            Class Name                                        Purpose                                                                                                                                   Location                                                Key Annotations                                                                                        Key Methods                                                                                                        Dependencies                                                                Business Logic
+        DisplayNameModificationFlowServiceImpl (Child)           Display name updates for child leads                                       oe-service/src/main/java/com/paytm/oe/services/lead/impl/DisplayNameModificationFlowServiceImpl.java @Service(ModificationFlow.Constants.DISPLAY_NAME_MODIFICATION)                                                   fetchDetails, updateDetails, validateDisplayName                 IRegexValidationService, OEValidator, IAuditTrailService, IUserBusinessMappingDao, IWorkFlowService            Name validation, child lead specific logic, parent synchronization
+        ECodeUpdateModificationFlowServiceImpl (Child)                 E-Code updates for child leads                                       oe-service/src/main/java/com/paytm/oe/services/lead/impl/ECodeUpdateModificationFlowServiceImpl.java        @Service(ModificationFlow.Constants.ECODE_MODIFICATION)                                                         fetchDetails, updateDetails, validateECode                                                OEEnterpriseHelperService, IWorkFlowService, IUserBusinessMappingDao                                  E-Code validation, child lead specific logic
+         DealerCodeModificationFlowServiceImpl (Child)            Dealer code updates for child leads                                        oe-service/src/main/java/com/paytm/oe/services/lead/impl/DealerCodeModificationFlowServiceImpl.java  @Service(ModificationFlow.Constants.DEALER_CODE_MODIFICATION)                                                    fetchDetails, updateDetails, validateDealerCode                                        OEServiceFactoryImpl, OEValidator, IUserBusinessMappingDao, IWorkFlowService                             Dealer code validation, child lead specific logic
+ GstinAddressUpdateModificationFlowServiceImpl (Child)          GSTIN address updates for child leads                                oe-service/src/main/java/com/paytm/oe/services/lead/impl/GstinAddressUpdateModificationFlowServiceImpl.java      @Service(ModificationFlow.Constants.GSTIN_ADDRESS_UPDATE)                                                  fetchDetails, updateDetails, validateGstinAddress                      IGSTService, IMarketPlaceService, IPGGatewayService, IUserBusinessMappingDao, IWorkFlowService             GSTIN validation, address verification, child lead specific logic
+               SpocModificationFlowServiceImpl (Child)       SPOC information updates for child leads                                              oe-service/src/main/java/com/paytm/oe/services/lead/impl/SpocModificationFlowServiceImpl.java         @Service(ModificationFlow.Constants.SPOC_MODIFICATION)                                                   fetchDetails, updateDetails, validateSpocDetails OEEnterpriseCreateLeadHelperService, IDocumentServiceInternal, IAgentDao, IUserBusinessMappingDao, IWorkFlowService                SPOC validation, child lead specific logic, contact management
+CorrespondenceAddressUpdateModificationService (Child) Correspondence address updates for child leads oe-panel-service/src/main/java/com/paytm/oe/agent/services/enterpriseModification/impl/CorrespondenceAddressUpdateModificationService.java                          Extends EnterpriseModificationService                             getRequestBody, validateModificationFlowLevelData, getModificationFlow                                                              EnterpriseModificationService, IUserBusinessMappingDao             Address validation, consent management, child lead specific logic
+         BankUpdateModificationFlowServiceImpl (Child)           Bank account updates for child leads                                        oe-service/src/main/java/com/paytm/oe/services/lead/impl/BankUpdateModificationFlowServiceImpl.java               @Service(ModificationFlow.Constants.BANK_UPDATE) fetchDetails, updateDetails, childLeadModification, isBankModificationAllowed, populateBankDetails                IPGGatewayService, OEValidator, OEEnterpriseHelperService, IUserBusinessMappingDao, IWorkFlowService Bank detail validation, settlement type validation, child lead specific logic
+
+================================================================================
+
+## WORKSHEET: Core Helper Services
+------------------------------------------------------------
+
+                   Class Name                                          Purpose                                                                                            Location Key Annotations                                                                                                                               Key Methods                                                                                      Dependencies                                                                                   Business Logic
+    OEEnterpriseHelperService Central helper service for enterprise operations             oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEEnterpriseHelperService.java        @Service copyOwnerDocumentsToBusinessLead, copyRbsmDocumentsToBusinessLead, updateModificationFlowInSai, getWorkflowVersion, updateMaquetteSAIKeys IKYBGatewayService, IMaquetteService, IPGGatewayService, IFsmGatewayService, IOAuthGatewayService Document management, workflow management, validation, external integrations, data transformation
+OECommonInternalServiceHelper               Common internal service operations oe-service/src/main/java/com/paytm/oe/services/internal_services/OECommonInternalServiceHelper.java        @Service                                                                                                      loadData, validate, utilityFunctions                                                              IUserBusinessMappingDao, OEValidator                                                      Data loading, validation, utility functions
+                  OEValidator                       Central validation service                                 oe-service/src/main/java/com/paytm/oe/common/utils/OEValidator.java        @Service                                                                                 validateBusinessRules, validateFormat, validateCrossField                                                       IRegexValidationService, IAuditTrailService                                   Business validation, format validation, cross-field validation
+             IWorkFlowService                      Workflow management service                             oe-service/src/main/java/com/paytm/oe/services/wf/IWorkFlowService.java       Interface                                                                       ifStageAllowedThenUpdate, moveToNextStageAndSaveJob, getActiveStage                                                               UserBusinessMapping, WorkFlowStatus                              Stage update validation, stage progression, active stage management
+           IAuditTrailService                           Audit trail management                   oe-service/src/main/java/com/paytm/oe/services/audittrail/IAuditTrailService.java       Interface                                                                                 fetchAuditConfigFromUBM, trackAuditEvent, manageAuditData                                                                  UserBusinessMapping, AuditValues                                         Audit configuration, audit events, audit data management
+
+================================================================================
+
+## WORKSHEET: External Integrations
+------------------------------------------------------------
+
+          Class Name                              Purpose                                                                       Location Key Annotations                                                  Key Methods                          Dependencies                                                     Business Logic
+   IPGGatewayService          Payment Gateway integration       oe-service/src/main/java/com/paytm/oe/services/pg/IPGGatewayService.java       Interface    createMID, updateMID, fetchMIDDetails, processTransaction  PGServiceHelper, UserBusinessMapping              PG operations, MID management, transaction processing
+         IKYBService KYB (Know Your Business) integration            oe-service/src/main/java/com/paytm/oe/services/kyb/IKYBService.java       Interface validateKYB, fetchKYBDetails, verifyAddress, verifyDocuments   KYBServiceImpl, UserBusinessMapping Business verification, address verification, document verification
+         IGSTService              GST service integration            oe-service/src/main/java/com/paytm/oe/services/gst/IGSTService.java       Interface                 validateGSTIN, fetchGSTDetails, integrateGST   GSTServiceImpl, UserBusinessMapping                                  GSTIN validation, GST integration
+IOAuthGatewayService    OAuth gateway service integration oe-service/src/main/java/com/paytm/oe/services/oauth/IOAuthGatewayService.java       Interface                       authenticate, validateToken, authorize OAuthServiceImpl, UserBusinessMapping                    Authentication, authorization, token validation
+
+================================================================================
+
+## WORKSHEET: Database Core Tables
+------------------------------------------------------------
+
+                           Table Name                                                  Purpose                            Description                                                                                Key Fields                                                                                                                Relationships                                                      Business Logic
+                user_business_mapping Primary entity representing merchant onboarding requests   Central entity for all merchant data id, lead_id, solution_type, entity_type, creator_cust_id, status, channel, audit_trail_id One-to-many with workflow_status, One-to-many with related business entities, One-to-many with documents and additional info Lead management, workflow tracking, audit trail, merchant lifecycle
+                      workflow_status        Tracks the current stage and history of each lead Workflow management and stage tracking    user_business_mapping_id, workflow_node_id, prev_workflow_node_id, is_active, metadata                                                       Many-to-one with user_business_mapping, Many-to-one with workflow_node                Stage progression, workflow history, status tracking
+                        workflow_node        Defines available workflow stages and transitions  Workflow definition and configuration                                                  stage, sub_stage, description, is_active                                                             One-to-many with workflow_status, One-to-many with workflow_edge          Workflow definition, stage configuration, transition rules
+                        workflow_edge              Defines workflow transitions and conditions         Workflow transition management                 from_node_id, to_node_id, workflow_definition_id, description, conditions                                                         Many-to-one with workflow_node, Many-to-one with workflow_definition            Transition logic, condition evaluation, workflow routing
+          user_business_mapping_owner               Business owner information and KYC details          Business ownership management                       ubm_id, owner_name, pan_number, aadhar_number, ownership_percentage                                                                                       Many-to-one with user_business_mapping              Owner management, KYC verification, ownership tracking
+user_business_mapping_additional_info   Flexible additional data storage for business entities             Additional data management                                                                ubm_id, key, value, status                                                                                       Many-to-one with user_business_mapping                     Flexible data storage, configuration management
+    related_business_solution_mapping                 Related business solution mapping entity       Business relationship management                                         ubm_id, related_ubm_id, relationship_type, status                                                                                       Many-to-one with user_business_mapping                        Business relationships, parent-child mapping
+             solution_additional_info                 Solution-specific additional information                 Solution configuration                                                               rbsm_id, key, value, status                                                                           Many-to-one with related_business_solution_mapping             Solution configuration, product details, business rules
+
+================================================================================
+
+## WORKSHEET: Entity Type Distribution
+------------------------------------------------------------
+
+                  Entity Type               Description Count Percentage                    Business Impact                 Onboarding Complexity
+               PROPRIETORSHIP Individual proprietorship 2,493      67.3%            Most common entity type         Simplified onboarding process
+               PUBLIC_LIMITED    Public limited company 1,196      32.2%                 Second most common           Complex corporate structure
+              PRIVATE_LIMITED   Private limited company   191       5.2%                  Medium complexity Corporate structure with restrictions
+                        TRUST        Trust organization   188       5.1%               Non-profit structure    Special documentation requirements
+       HINDU_UNDIVIDED_FAMILY                       HUF    28       0.8%          Family business structure           Traditional business format
+LIMITED_LIABILITY_PARTNERSHIP                       LLP    22       0.6% Partnership with limited liability                      Hybrid structure
+                  PARTNERSHIP          Partnership firm    20       0.5%            Traditional partnership              Multiple owner structure
+       ASSOCIATION_OF_PERSONS                       AOP    14       0.4%                   Group of persons         Collective business structure
+     SOCIETY_ASSOCIATION_CLUB       Society/Association    12       0.3%            Non-profit organization         Social organization structure
+                   GOVERNMENT         Government entity     6       0.2%            Government organization               Public sector structure
+
+================================================================================
+
+## WORKSHEET: Workflow Stage Distribution
+------------------------------------------------------------
+
+                                 Workflow Stage Count                   Description                    Business Meaning         Process Phase
+                              GG - LEAD_CREATED 4,171    Most common starting point Initial lead creation by CAM agents   Lead creation phase
+                               GG - LEAD_POSTED 2,886 Lead submitted for processing           Lead posted for QC review Quality control phase
+            LEAD_CLOSED - LEAD_PARTIALLY_CLOSED 1,120           Incomplete closures     Leads closed with pending items         Closure phase
+             PG_CALLBACK - PG_CALL_BACK_SUCCESS 1,050       Payment gateway success           Successful PG integration  PG integration phase
+                    GG - SUB_WORKFLOW_TRIGGERED 1,031       Sub-processes initiated             Sub-workflow activation     Sub-process phase
+                         GG - DOCUMENT_UPLOADED   947           Document processing          Document upload completion        Document phase
+                         QC - QC_ACTION_PENDING   937       Quality control pending            QC agent action required              QC phase
+         LEAD_CLOSED - LEAD_SUCCESSFULLY_CLOSED   848        Successful completions           Successfully closed leads      Completion phase
+KYB_WALLET_ID_EDIT - KYB_WALLET_ID_EDIT_SUCCESS   842                KYB processing               KYB wallet ID editing             KYB phase
+                          PANEL - PANEL_SUCCESS   751              Panel operations             Panel operation success           Panel phase
+
+================================================================================
+
+## WORKSHEET: SQL Files and Scripts
+------------------------------------------------------------
+
+                                               File Name                                            Description                       Directory                Category                                                  Purpose
+                    commercialsRejectedOnlineQueries.sql     Workflow edge management for commercial rejections                      Root Level     Workflow management Creates workflow edges for commercial rejection handling
+                                           COP-31317.sql Risk assessment (RA) questions and workflow procedures                      Root Level         Risk assessment             RA questions mapping and workflow procedures
+                                           COP-31285.sql  Large enterprise enhancement script (29KB, 187 lines)                      Root Level Enterprise enhancements                  Comprehensive enterprise system updates
+                                           COP-31833.sql       Massive system update script (429KB, 2991 lines)                      Root Level          System updates               Major system-wide updates and enhancements
+                                           COP-31493.sql       Enterprise system enhancements (20KB, 172 lines)                      Root Level     Enterprise features                 Enterprise-specific feature enhancements
+                           COP-30691_diy_online_queries/                      Initial DIY online implementation                      DIY_ONLINE              DIY online               Initial DIY online workflow implementation
+                               COP-31307_Phase2_queries/                                   Phase 2 enhancements                      DIY_ONLINE              DIY online                          Phase 2 DIY online enhancements
+                             COP-31793_Phase2-1_queries/                                      Phase 2.1 updates                      DIY_ONLINE              DIY online                             Phase 2.1 DIY online updates
+                           COP-31794_diy_online_phase_3/                                 Phase 3 implementation                      DIY_ONLINE              DIY online                        Phase 3 DIY online implementation
+                           COP-32632_diy_online_shopify/                                    Shopify integration                      DIY_ONLINE     Shopify integration                             Shopify platform integration
+COP-33221_missingWfOnline_banklob_andkybEdit_queries.sql                                 Missing workflow edges                    PPSL-Queries     Workflow management         Missing workflow edges for bank LOB and KYB edit
+                    COP-33221_mit_bhApproval_queries.sql                     MIT business head approval queries                    PPSL-Queries       Approval workflow                      MIT business head approval workflow
+                            bankingModuleLeadRemoval.sql                            Banking module lead removal Enterprise_Enhancements_Queries          Banking module                Banking module lead removal functionality
+                                          cpvChanges.sql            CPV (Customer Profile Verification) changes Enterprise_Enhancements_Queries                     CPV                    Customer Profile Verification changes
+                        onlineMaquetteLimitFramework.sql                        Online Maquette limit framework Enterprise_Enhancements_Queries                Maquette           Online Maquette limit framework implementation
+                               onlinedocumentsupdate.sql                                Online document updates Enterprise_Enhancements_Queries     Document management                       Online document management updates
+
+================================================================================
+
+## WORKSHEET: Database Schema Features
+------------------------------------------------------------
+
+               Feature                        Implementation                              Description                                     Benefits
+           Audit Trail  Hibernate Envers for data versioning         Complete change history tracking        Data integrity, compliance, debugging
+       UUID Generation    Custom UUID generation for lead_id             Unique identifier generation       Data uniqueness, security, scalability
+   Workflow Management        Complex workflow state machine          Multi-stage workflow processing Business process automation, status tracking
+        Reference Data  Centralized configuration management  System configuration and business rules    Flexibility, maintainability, consistency
+   Document Management           Multi-document type support         Document upload and verification              Compliance, verification, audit
+  Entity Relationships   Complex entity relationship mapping  Business entity relationship management             Data consistency, business logic
+Transaction Management              ACID transaction support           Data consistency and integrity                  Reliability, data integrity
+     Indexing Strategy           Optimized database indexing           Query performance optimization                     Performance, scalability
+          Partitioning Table partitioning for large datasets  Performance optimization for large data                     Scalability, performance
+   Caching Integration             Redis caching integration Performance optimization through caching                 Performance, user experience
+
+================================================================================
+
+## WORKSHEET: Business Rules and Validations
+------------------------------------------------------------
+
+              Rule Category                         Implementation                          Description             Business Impact
+       Workflow Transitions   Strict stage progression enforcement               Stage-based validation  Business process integrity
+        Document Management         Multiple document type support Document validation and verification Compliance and verification
+            Data Validation              Business logic validation    Cross-field and format validation  Data quality and integrity
+Security and Access Control              Role-based access control     Authentication and authorization     Security and compliance
+      Entity-Specific Rules Different rules for different entities        Entity-based validation logic        Business flexibility
+     Stage-Based Validation        Stage-specific validation rules            Workflow stage validation             Process control
+        Agent Authorization        Agent-based modification rights          Agent permission validation              Access control
+ Cross-Reference Validation      Cross-field dependency validation          Data consistency validation              Data integrity
+       Real-time Validation          Real-time validation feedback        Immediate validation response             User experience
+          Compliance Checks       Regulatory compliance validation          Compliance rule enforcement       Regulatory compliance
+
+================================================================================
+
+## WORKSHEET: Database Integration Points
+------------------------------------------------------------
+
+                System                      Integration Type                       Description                         Business Purpose
+           BOSS System   Final validation and MID generation     Downstream system integration Merchant ID generation, final validation
+            KYB System  Business verification and enrichment    Know Your Business integration   Business verification, data enrichment
+            PG Systems             Payment gateway callbacks       Payment gateway integration   MID management, transaction processing
+ Document Verification          External document validation    Document verification services          Document validation, compliance
+Salesforce Integration              CRM data synchronization        Salesforce CRM integration           Lead management, customer data
+           Redis Cache      Performance optimization caching         Caching layer integration   Performance optimization, data caching
+   Notification System               Email/SMS notifications  Communication system integration               User notifications, alerts
+          Audit System             Comprehensive audit trail          Audit system integration              Change tracking, compliance
+      Reporting System               Analytics and reporting      Reporting system integration         Business intelligence, analytics
+          OAuth System User authentication and authorization Authentication system integration            User authentication, security
+
+================================================================================
+
+## WORKSHEET: Dev Activity Summary
+------------------------------------------------------------
+
+      Author  Commits First Commit Last Commit % of Total
+Oshi Agrawal       79   2025-04-28  2025-08-21      91.9%
+ Swati Verma        4   2025-05-29  2025-07-09       4.7%
+ Prince Puri        3   2025-04-28  2025-05-22       3.5%
+
+================================================================================
+
+## WORKSHEET: Functional Areas
+------------------------------------------------------------
+
+        Functional Area  Commit Count % of Total
+    Build Configuration             4       4.7%
+    Document Management             4       4.7%
+    Email Notifications             4       4.7%
+Validation Verification             4       4.7%
+        Kafka Messaging             2       2.3%
+
+================================================================================
+
+## WORKSHEET: Most Changed Classes
+------------------------------------------------------------
+
+                     Class Name  Change Count      Type
+                    OEConstants             8 Constants
+              MerchantConstants             7 Constants
+      ToolKitGatewayServiceImpl             6   Service
+      OEEnterpriseHelperService             5   Service
+               RiskEngineHelper             4    Helper
+                   ConditionKey             4     Other
+                    CommonUtils             4     Utils
+        IUserBusinessMappingDao             4       DAO
+     UserBusinessMappingDaoImpl             4       DAO
+      UpdateRequestForDiyOnline             3     Other
+DIYMcoOnlineServiceInternalImpl             3   Service
+             KafkaProducerSetup             3     Other
+             PgRuleEngineHelper             3    Helper
+                          Utils             3     Utils
+         IDocumentServiceHelper             3   Service
+                   OEProperties             3     Other
+                    DocProvided             3     Other
+     SolutionAdditionalInfoKeys             3     Other
+               OELoadProperties             3     Other
+          LeadhelperServiceImpl             3   Service
+
+================================================================================
+
+## WORKSHEET: Most Changed Methods
+------------------------------------------------------------
+
+                      Method Name  Change Count       Category
+                             info          1414        Logging
+                              put           635    Data Access
+                            error           379        Logging
+                           equals           360     Validation
+                             name           319 Business Logic
+                 equalsIgnoreCase           312        Utility
+                          nonNull           288        Utility
+                       isNotEmpty           285     Validation
+                              add           274 Business Logic
+                       isNotBlank           273     Validation
+       fetchSolAddInfoValueForKey           249 Business Logic
+getRelatedBusinessSolutionMapping           198 Business Logic
+                  setSolutionType           185 Business Logic
+                              get           172    Data Access
+                  getSolutionType           159 Business Logic
+                          isEmpty           138     Validation
+addOrUpdateSolutionAdditionalInfo           137 Business Logic
+         addOrUpdateSolAddInfoObj           133 Business Logic
+                          isBlank           130     Validation
+                    setStatusCode           114 Business Logic
+
+================================================================================
+
+## WORKSHEET: Most Changed Files
+------------------------------------------------------------
+
+                     Class Name        Component                                          Package  Change Count                                                                                                      Full Path
+                    OEConstants          oe-base               java/com/paytm/oe/common/constants             8                                           oe-base/src/main/java/com/paytm/oe/common/constants/OEConstants.java
+              MerchantConstants  MerchantService         java/com/paytm/merchant/common/constants             7                       MerchantService/src/main/java/com/paytm/merchant/common/constants/MerchantConstants.java
+      ToolKitGatewayServiceImpl          oe-base          java/com/paytm/oe/services/toolkit/impl             6                        oe-base/src/main/java/com/paytm/oe/services/toolkit/impl/ToolKitGatewayServiceImpl.java
+      OEEnterpriseHelperService       oe-service             java/com/paytm/oe/services/lead/impl             5                        oe-service/src/main/java/com/paytm/oe/services/lead/impl/OEEnterpriseHelperService.java
+               RiskEngineHelper          oe-base               java/com/paytm/oe/services/pg/impl             4                                      oe-base/src/main/java/com/paytm/oe/services/pg/impl/RiskEngineHelper.java
+                   ConditionKey          gg-base     java/com/paytm/merchant/common/objects/enums             4                                gg-base/src/main/java/com/paytm/merchant/common/objects/enums/ConditionKey.java
+                    CommonUtils          oe-base                   java/com/paytm/oe/common/utils             4                                               oe-base/src/main/java/com/paytm/oe/common/utils/CommonUtils.java
+        IUserBusinessMappingDao          oe-base                            java/com/paytm/oe/dao             4                                            oe-base/src/main/java/com/paytm/oe/dao/IUserBusinessMappingDao.java
+     UserBusinessMappingDaoImpl          oe-base                       java/com/paytm/oe/dao/impl             4                                    oe-base/src/main/java/com/paytm/oe/dao/impl/UserBusinessMappingDaoImpl.java
+      UpdateRequestForDiyOnline          oe-base      java/com/paytm/oe/services/pg/handlers/impl             3                    oe-base/src/main/java/com/paytm/oe/services/pg/handlers/impl/UpdateRequestForDiyOnline.java
+DIYMcoOnlineServiceInternalImpl  MerchantService java/com/paytm/merchant/services/mco/online/impl             3 MerchantService/src/main/java/com/paytm/merchant/services/mco/online/impl/DIYMcoOnlineServiceInternalImpl.java
+             KafkaProducerSetup          oe-base                  java/com/paytm/oe/startup/kafka             3                                       oe-base/src/main/java/com/paytm/oe/startup/kafka/KafkaProducerSetup.java
+             PgRuleEngineHelper          oe-base               java/com/paytm/oe/services/pg/impl             3                                    oe-base/src/main/java/com/paytm/oe/services/pg/impl/PgRuleEngineHelper.java
+         IDocumentServiceHelper          oe-base                         java/com/paytm/oe/common             3                                          oe-base/src/main/java/com/paytm/oe/common/IDocumentServiceHelper.java
+                   OEProperties          oe-base               java/com/paytm/oe/common/constants             3                                          oe-base/src/main/java/com/paytm/oe/common/constants/OEProperties.java
+                    DocProvided          oe-base                          java/com/paytm/oe/enums             3                                                      oe-base/src/main/java/com/paytm/oe/enums/DocProvided.java
+     SolutionAdditionalInfoKeys          oe-base                          java/com/paytm/oe/enums             3                                       oe-base/src/main/java/com/paytm/oe/enums/SolutionAdditionalInfoKeys.java
+               OELoadProperties          oe-base                        java/com/paytm/oe/startup             3                                               oe-base/src/main/java/com/paytm/oe/startup/OELoadProperties.java
+          LeadhelperServiceImpl oe-panel-service    java/com/paytm/oe/agent/services/lead/v1/impl             3             oe-panel-service/src/main/java/com/paytm/oe/agent/services/lead/v1/impl/LeadhelperServiceImpl.java
+       LeadFormatterUtilsImplV2 oe-panel-service            java/com/paytm/oe/agent/utils/v2/impl             3                  oe-panel-service/src/main/java/com/paytm/oe/agent/utils/v2/impl/LeadFormatterUtilsImplV2.java
+
+================================================================================
+
+## WORKSHEET: Business Reasons
+------------------------------------------------------------
+
+           Business Reason  Occurrence Count Priority
+          Code Integration                16     High
+      Configuration Update                13     High
+  Data Quality Improvement                13     High
+Error Handling Improvement                13     High
+   Data Access Improvement                12     High
+Business Logic Enhancement                 9   Medium
+          Build Management                 4      Low
+       Utility Improvement                 3      Low
+    Validation Enhancement                 1      Low
+                   Bug Fix                 1      Low
+
+================================================================================
+
+## WORKSHEET: Technical Patterns
+------------------------------------------------------------
+
+  Technical Pattern  Occurrence Count       Category
+  Conditional Logic              6365 Business Logic
+Annotation Addition              3402 Infrastructure
+Document Processing              3020     Compliance
+     Error Handling              3005 Infrastructure
+  Data Manipulation              2496 Business Logic
+  Constant Addition              1279          Other
+   Validation Logic               768 Business Logic
+    Risk Assessment               309     Compliance
+  Kafka Integration               180    Integration
+ Email Notification               166    Integration
+
+================================================================================
+
+## WORKSHEET: COP Tickets
+------------------------------------------------------------
+
+Ticket ID  Commit Count       Category
+    COP-0            50 Infrastructure
+COP-32163            10     Commercial
+COP-33386             9     Commercial
+COP-34185             4        Payment
+COP-32633             3     Validation
+COP-34632             2        Bug Fix
+COP-34164             2        Bug Fix
+COP-34505             1        Feature
+COP-34061             1        Feature
+
+================================================================================
+
+## WORKSHEET: Analysis Summary
+------------------------------------------------------------
+
+                  Metric                                                    Value
+           Analysis Date                                      2025-08-25 16:36:14
+  Total Commits Analyzed                                                       86
+         Analysis Period                                 2025-04-25 to 2025-08-25
+          Target Authors Oshi Agrawal, Prince Puri, Swati Verma, Ashutosh Jaiswal
+    Unique Files Changed                                                      668
+  Unique Classes Changed                                                      661
+  Unique Methods Changed                                                     2443
+   Most Active Component                                                  oe-base
+      Most Changed Class                                              OEConstants
+     Most Changed Method                                                     info
+ Primary Business Driver                 Code Integration & Configuration Updates
+   Key Technical Pattern                       Conditional Logic & Error Handling
+        Compliance Focus                    Document Processing & Risk Assessment
+Technology Modernization                     Java 21 Migration & Spring Framework
+
+================================================================================
+
