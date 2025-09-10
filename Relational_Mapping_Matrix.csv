@@ -1,0 +1,29 @@
+Table (Source),Links To (Target),Join/Key Fields (source -> target),Cardinality,Notes
+user_business_mapping (UBM),related_business_solution_mapping (RBSM),related_business_solution_mapping_id -> id,many -> one,Anchors a lead to a solution instance
+related_business_solution_mapping (RBSM),business,business_id -> id,many -> one,Solution instance belongs to a business
+related_business_solution_mapping (RBSM),solution_additional_info (SAI),solution_id -> solution_id,many -> many (by key),SAI holds solution-level configuration/state
+related_business_solution_mapping_additional_info (RBSMAI),related_business_solution_mapping (RBSM),related_business_solution_mapping_id -> id,many -> one,Per-instance business logic (PG/AML/Agreements)
+user_business_mapping_additional_info (UBMAI),user_business_mapping (UBM),user_business_mapping_id -> id,many -> one,Lead-scoped flags/process hints
+user_business_mapping_owner (OWNER),user_business_mapping (UBM),user_business_mapping_id -> id,many -> one,Owners/signatories for a lead
+user_business_mapping_owner (OWNER),user_info (UI),user_info_id -> id,many -> one,Person/identity record
+ubm_owner_ownership_type (UOOT),user_business_mapping_owner (OWNER),user_business_mapping_owner_id -> id,many -> one,Ownership role/type/percentage
+ubm_owner_document_mapping (UODM),user_business_mapping_owner (OWNER),ubm_owner_id -> id,many -> one,Owner-level document attachment
+ubm_owner_document_mapping (UODM),document (DOC),document_id -> id,many -> one,Physical/virtual document
+business_document_mapping (BDM),business,business_id -> id,many -> one,Business-level document attachment
+business_document_mapping (BDM),document (DOC),document_id -> id,many -> one,Document linked to business
+related_business_solution_document_mapping (RBSDM),related_business_solution_mapping (RBSM),related_business_solution_mapping_id -> id,many -> one,Solution-instance document attachment
+related_business_solution_document_mapping (RBSDM),document (DOC),document_id -> id,many -> one,Document linked to solution instance
+ubm_owner_address_mapping (UOAM),user_business_mapping_owner (OWNER),ubm_owner_id -> id,many -> one,Owner address linkage
+ubm_owner_address_mapping (UOAM),address (ADDR),address_id -> id,many -> one,Normalized address
+business_address_mapping (BAM),business,business_id -> id,many -> one,Business address linkage
+business_address_mapping (BAM),address (ADDR),address_id -> id,many -> one,Normalized address
+user_business_mapping (UBM),workflow_status (WS),id -> user_business_mapping_id,one -> many,State history for the lead
+workflow_status (WS),workflow_node (WN),workflow_node_id -> id,many -> one,Current state definition
+job,user_business_mapping (UBM),context_key='ubm', context_val -> id (or ubm_id -> id),many -> one,Async jobs keyed to lead context
+generic_audit (GA),user_business_mapping (UBM),lead_id or contextual fields,many -> one (by context),External API call audit trail
+audit_event (AE),workflow_status (WS),workflow_status_id -> id,many -> one,Internal workflow/audit events
+user_business_mapping_aud (UBM_AUD),user_business_mapping (UBM),id (same PK value),1:1 history,Temporal changes via auditing
+related_business_solution_mapping (RBSM),bank_details (BANK),(optional) bank_details_id -> id,many -> one,Present in some schema variants
+business,bank_details (BANK),(optional) bank_details_id -> id,many -> one,Legacy/variant linkage
+bank_details_document_mapping (BDDM),bank_details (BANK),bank_details_id -> id,many -> one,Bank-related documentation
+bank_details_document_mapping (BDDM),document (DOC),document_id -> id,many -> one,Document linked to bank details
